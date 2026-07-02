@@ -3,6 +3,6 @@
   "build": 11,
   "android_url": "https://github.com/Th1ry/alpaca.app/releases/download/v0.1.10/alpaca-options-app-v0.1.10.apk",
   "windows_url": "",
-  "notes": "期权数量显示张、正股显示股；修复搜索切换股票无法连接与K线加载慢",
+  "notes": "Release v0.1.10: qty units and trade search/chart load fixes.",
   "min_build": 0
 }
