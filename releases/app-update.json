@@ -1,8 +1,8 @@
 {
-  "version": "0.1.8",
-  "build": 9,
-  "android_url": "https://github.com/Th1ry/alpaca.app/releases/download/v0.1.8/alpaca-options-app-v0.1.8.apk",
+  "version": "0.1.7",
+  "build": 8,
+  "android_url": "https://github.com/Th1ry/alpaca.app/releases/download/v0.1.7/alpaca-options-app-v0.1.7.apk",
   "windows_url": "",
-  "notes": "修正购买力（现金）与融资购买力显示，首页与交易页统一",
+  "notes": "Release v0.1.7: configurable OTA manifest URL in settings.",
   "min_build": 0
 }
