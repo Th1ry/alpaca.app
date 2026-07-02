@@ -155,6 +155,9 @@ class S {
   static String get apiSavedLocal => _active.apiSavedLocal;
   static String apiConnectedDetail(bool paper, double equity) =>
       _active.apiConnectedDetail(paper, equity);
+  static String get apiErrorNetwork => _active.apiErrorNetwork;
+  static String apiErrorUnauthorized(bool paper) => _active.apiErrorUnauthorized(paper);
+  static String apiMarketDataLimited(String detail) => _active.apiMarketDataLimited(detail);
   static String get chartStock => _active.chartStock;
   static String get chartOption => _active.chartOption;
   static String get preferences => _active.preferences;

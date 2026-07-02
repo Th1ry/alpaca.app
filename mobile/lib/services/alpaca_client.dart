@@ -17,6 +17,7 @@ class AlpacaConnectionInfo {
     required this.paper,
     required this.equity,
     this.status,
+    this.marketDataWarning,
   })  : ok = true,
         error = null;
 
@@ -24,12 +25,14 @@ class AlpacaConnectionInfo {
       : ok = false,
         paper = false,
         equity = 0,
-        status = null;
+        status = null,
+        marketDataWarning = null;
 
   final bool ok;
   final bool paper;
   final double equity;
   final String? status;
+  final String? marketDataWarning;
   final String? error;
 }
 
@@ -65,7 +68,7 @@ class AlpacaClient {
 
   bool get configured => _creds.isConfigured;
 
-  /// Verifies credentials against Alpaca trading + market data APIs.
+  /// Verifies trading credentials via account endpoint (same path the app uses).
   Future<AlpacaConnectionInfo> testConnection() async {
     if (!_creds.isConfigured) {
       return const AlpacaConnectionInfo.failure('missing_keys');
@@ -73,22 +76,46 @@ class AlpacaClient {
     try {
       final data = await tradingGet('/v2/account') as Map<String, dynamic>;
       final equity = double.tryParse('${data['equity']}') ?? 0;
-      try {
-        await dataGet(
-          '/v2/stocks/AAPL/bars?symbols=AAPL&timeframe=1Day&limit=1&feed=${_creds.dataFeed}',
-        );
-      } on AlpacaApiException catch (e) {
-        return AlpacaConnectionInfo.failure('Market data: ${e.message}');
-      }
       return AlpacaConnectionInfo.success(
         paper: _creds.isPaper,
         equity: equity,
         status: '${data['status'] ?? ''}',
       );
     } on AlpacaApiException catch (e) {
-      return AlpacaConnectionInfo.failure(e.message);
+      return AlpacaConnectionInfo.failure(_formatFailure(e));
+    } on DioException catch (e) {
+      return AlpacaConnectionInfo.failure(_formatDioFailure(e));
     } catch (e) {
       return AlpacaConnectionInfo.failure(e.toString());
+    }
+  }
+
+  String _formatFailure(AlpacaApiException e) {
+    if (e.statusCode == 401 || e.statusCode == 403) {
+      return 'unauthorized:${_creds.isPaper ? 'paper' : 'live'}';
+    }
+    final lower = e.message.toLowerCase();
+    if (lower.contains('timeout') || lower.contains('timed out')) {
+      return 'network_timeout';
+    }
+    if (lower.contains('failed host lookup') ||
+        lower.contains('connection error') ||
+        lower.contains('network is unreachable')) {
+      return 'network_unreachable';
+    }
+    return e.message;
+  }
+
+  String _formatDioFailure(DioException e) {
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return 'network_timeout';
+      case DioExceptionType.connectionError:
+        return 'network_unreachable';
+      default:
+        return e.message ?? e.toString();
     }
   }
 

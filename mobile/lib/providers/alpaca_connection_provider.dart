@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/alpaca_config.dart';
 import '../core/strings.dart';
+import '../models/models.dart';
 import '../services/alpaca_client.dart';
 import '../services/api_service.dart';
 import '../services/ws_service.dart';
@@ -59,11 +60,25 @@ class AlpacaConnectionNotifier extends StateNotifier<AlpacaConnectionView> {
         verify(showSnack: false);
       }
     });
+    _ref.listen<AsyncValue<AccountSummary?>>(accountProvider, (prev, next) {
+      next.whenData(_syncFromAccount);
+    });
     Future.microtask(_bootstrap);
   }
 
   final Ref _ref;
   bool _internalCredentialUpdate = false;
+
+  void _syncFromAccount(AccountSummary? account) {
+    if (account == null || state.busy) return;
+    if (state.phase == AlpacaConnPhase.ok) return;
+    final creds = _ref.read(alpacaCredentialsProvider);
+    if (!creds.isConfigured) return;
+    state = AlpacaConnectionView(
+      phase: AlpacaConnPhase.ok,
+      detail: S.apiConnectedDetail(creds.isPaper, account.equity),
+    );
+  }
 
   Future<void> _persist(AlpacaCredentials creds) async {
     _internalCredentialUpdate = true;
@@ -83,11 +98,26 @@ class AlpacaConnectionNotifier extends StateNotifier<AlpacaConnectionView> {
     }
   }
 
-  String _formatError(String? raw) {
+  String _formatError(String? raw, {AlpacaCredentials? creds}) {
     if (raw == null || raw.isEmpty) return S.apiStatusFailed;
     if (raw == 'missing_keys') return S.apiNotConfigured;
+    if (raw == 'network_timeout' || raw == 'network_unreachable') {
+      return S.apiErrorNetwork;
+    }
+    if (raw.startsWith('unauthorized:')) {
+      final paper = raw.endsWith(':paper');
+      return S.apiErrorUnauthorized(paper);
+    }
+    final lower = raw.toLowerCase();
+    if (lower.contains('unauthorized') || lower.contains('forbidden')) {
+      final paper = creds?.isPaper ?? _ref.read(alpacaCredentialsProvider).isPaper;
+      return S.apiErrorUnauthorized(paper);
+    }
     return raw;
   }
+
+  String _connectedDetail(AlpacaConnectionInfo result) =>
+      S.apiConnectedDetail(result.paper, result.equity);
 
   void _refreshAppData() {
     _ref.read(portfolioRefreshProvider.notifier).state++;
@@ -128,7 +158,7 @@ class AlpacaConnectionNotifier extends StateNotifier<AlpacaConnectionView> {
     if (result.ok) {
       state = AlpacaConnectionView(
         phase: AlpacaConnPhase.ok,
-        detail: S.apiConnectedDetail(result.paper, result.equity),
+        detail: _connectedDetail(result),
       );
       _refreshAppData();
       return true;
@@ -137,7 +167,7 @@ class AlpacaConnectionNotifier extends StateNotifier<AlpacaConnectionView> {
     state = AlpacaConnectionView(
       phase: AlpacaConnPhase.fail,
       detail: persistOnSuccess ? null : S.apiSavedLocal,
-      error: _formatError(result.error),
+      error: _formatError(result.error, creds: c),
     );
     return false;
   }

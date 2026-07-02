@@ -3,6 +3,7 @@
 backend/.env
 *.pem
 *.keystore
+scripts/release-secrets.local.txt
 
 # Python
 __pycache__/

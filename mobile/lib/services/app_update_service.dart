@@ -154,6 +154,37 @@ class AppUpdateService {
     return AppUpdateManifest.fromJson(json);
   }
 
+  Future<String?> _validateApkDownloadUrl(String url) async {
+    try {
+      final resp = await _dio.headUri(
+        Uri.parse(url),
+        options: Options(
+          followRedirects: true,
+          validateStatus: (s) => s != null && s < 500,
+          receiveTimeout: const Duration(seconds: 15),
+          sendTimeout: const Duration(seconds: 15),
+        ),
+      );
+      if (resp.statusCode != 200) {
+        return 'invalid_apk_url';
+      }
+      final type = (resp.headers.value('content-type') ?? '').toLowerCase();
+      if (type.contains('text/html') || type.contains('application/json')) {
+        return 'invalid_apk_url';
+      }
+      final len = resp.headers.value('content-length');
+      if (len != null) {
+        final bytes = int.tryParse(len) ?? 0;
+        if (bytes > 0 && bytes < 5 * 1024 * 1024) {
+          return 'invalid_apk_url';
+        }
+      }
+      return null;
+    } catch (_) {
+      return 'invalid_apk_url';
+    }
+  }
+
   Stream<AppUpdateInstallProgress> installUpdate(AppUpdateInfo info) async* {
     final url = info.manifest.downloadUrlForCurrentPlatform();
     if (url == null || url.isEmpty) {
@@ -165,6 +196,14 @@ class AppUpdateService {
     }
 
     if (!kIsWeb && Platform.isAndroid) {
+      final urlError = await _validateApkDownloadUrl(url);
+      if (urlError != null) {
+        yield AppUpdateInstallProgress(
+          phase: AppUpdateInstallPhase.failed,
+          message: urlError,
+        );
+        return;
+      }
       yield* _installAndroid(url);
       return;
     }

@@ -1,8 +1,8 @@
 {
-  "version": "0.1.10",
-  "build": 11,
-  "android_url": "https://github.com/Th1ry/alpaca.app/releases/download/v0.1.10/alpaca-options-app-v0.1.10.apk",
+  "version": "0.1.11",
+  "build": 12,
+  "android_url": "https://github.com/Th1ry/alpaca.app/releases/download/v0.1.11/alpaca-options-app-v0.1.11.apk",
   "windows_url": "",
-  "notes": "Release v0.1.10: qty units and trade search/chart load fixes.",
+  "notes": "修复 API 连接误报；OTA 固定签名；下载前校验 APK 链接",
   "min_build": 0
 }

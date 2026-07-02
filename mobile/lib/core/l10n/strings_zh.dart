@@ -144,6 +144,10 @@ class StringsZh {
   String get apiSavedLocal => '凭证已保存到本设备';
   String apiConnectedDetail(bool paper, double equity) =>
       '${paper ? "Paper 模拟盘" : "Live 实盘"} · 账户权益 \$${equity.toStringAsFixed(2)}';
+  String get apiErrorNetwork => '无法连接 Alpaca 服务器，请检查网络或代理/VPN 后重试';
+  String apiErrorUnauthorized(bool paper) =>
+      'Key 或 Secret 无效，或 Paper/Live 选错了。当前为 ${paper ? "Paper 模拟盘" : "Live 实盘"}，请确认 Alpaca 控制台生成的 Key 与环境一致';
+  String apiMarketDataLimited(String detail) => '行情受限：$detail';
   String get chartStock => '正股';
   String get chartOption => '期权';
   String get preferences => '偏好设置';
@@ -194,6 +198,10 @@ class StringsZh {
         return '未找到适用于当前平台的下载地址';
       case 'launch_failed':
         return '无法打开下载链接';
+      case 'invalid_apk_url':
+        return '安装包尚未发布或下载链接无效，请稍后再试或用电脑拷贝 APK 安装';
+      case 'INSTALLATION_ERROR':
+        return '安装失败：签名不一致。请先卸载当前版本，再从 GitHub Release 安装新版；配置固定签名后后续 OTA 才能覆盖升级';
       default:
         return code.isEmpty ? updateInstallFailed : '$updateInstallFailed ($code)';
     }

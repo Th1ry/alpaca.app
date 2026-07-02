@@ -147,6 +147,11 @@ class StringsEn {
   String get apiSavedLocal => 'Credentials stored on this device';
   String apiConnectedDetail(bool paper, double equity) =>
       '${paper ? "Paper" : "Live"} · equity \$${equity.toStringAsFixed(2)}';
+  String get apiErrorNetwork =>
+      'Cannot reach Alpaca. Check your network or try a VPN/proxy.';
+  String apiErrorUnauthorized(bool paper) =>
+      'Invalid Key/Secret or wrong Paper/Live mode. Currently ${paper ? "Paper" : "Live"} — use keys from the matching Alpaca dashboard.';
+  String apiMarketDataLimited(String detail) => 'Market data limited: $detail';
   String get chartStock => 'Stock';
   String get chartOption => 'Option';
   String get preferences => 'Preferences';
@@ -198,6 +203,10 @@ class StringsEn {
         return 'No download URL for this platform';
       case 'launch_failed':
         return 'Could not open download link';
+      case 'invalid_apk_url':
+        return 'APK not published yet or bad download URL — retry later or sideload the APK';
+      case 'INSTALLATION_ERROR':
+        return 'Install failed: signing mismatch. Uninstall the current app, install from GitHub Release; OTA works after releases use a fixed keystore.';
       default:
         return code.isEmpty ? updateInstallFailed : '$updateInstallFailed ($code)';
     }
