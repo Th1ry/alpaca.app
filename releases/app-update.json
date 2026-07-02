@@ -3,6 +3,6 @@
   "build": 12,
   "android_url": "https://github.com/Th1ry/alpaca.app/releases/download/v0.1.11/alpaca-options-app-v0.1.11.apk",
   "windows_url": "",
-  "notes": "修复 API 连接误报；OTA 固定签名；下载前校验 APK 链接",
+  "notes": "Fix release workflow YAML syntax for key.properties generation.",
   "min_build": 0
 }
