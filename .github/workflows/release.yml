@@ -69,12 +69,12 @@ jobs:
             exit 1
           fi
           echo "${ANDROID_KEYSTORE_BASE64}" | base64 -d > mobile/android/release.keystore
-          cat > mobile/android/key.properties <<EOF
-storePassword=${ANDROID_KEYSTORE_PASSWORD}
-keyPassword=${ANDROID_KEY_PASSWORD}
-keyAlias=${ANDROID_KEY_ALIAS}
-storeFile=release.keystore
-EOF
+          {
+            echo "storePassword=${ANDROID_KEYSTORE_PASSWORD}"
+            echo "keyPassword=${ANDROID_KEY_PASSWORD}"
+            echo "keyAlias=${ANDROID_KEY_ALIAS}"
+            echo "storeFile=release.keystore"
+          } > mobile/android/key.properties
 
       - name: Build release APK
         working-directory: mobile
