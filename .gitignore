@@ -1,0 +1,50 @@
+# Secrets
+.env
+backend/.env
+*.pem
+*.keystore
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock.bak
+
+# Build outputs
+build/
+mobile/build/
+mobile/.dart_tool/
+releases/
+*.apk
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Android local SDK path (machine-specific)
+mobile/android/local.properties
+mobile/android/.gradle/
+mobile/android/app/debug/
+mobile/android/app/profile/
+mobile/android/app/release/
+
+# iOS / macOS
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/ios/Flutter/ephemeral/
+mobile/macos/Flutter/ephemeral/
+
+# Windows ephemeral
+mobile/windows/flutter/ephemeral/
+
+# OS
+.DS_Store
+Thumbs.db
