@@ -1,8 +1,8 @@
 {
-  "version": "0.1.8",
-  "build": 9,
-  "android_url": "https://github.com/Th1ry/alpaca.app/releases/download/v0.1.8/alpaca-options-app-v0.1.8.apk",
+  "version": "0.1.9",
+  "build": 10,
+  "android_url": "https://github.com/Th1ry/alpaca.app/releases/download/v0.1.9/alpaca-options-app-v0.1.9.apk",
   "windows_url": "",
-  "notes": "Release v0.1.8: fix buying power labels and OTA manifest.",
+  "notes": "Release v0.1.9: fix in-app OTA crash on Android.",
   "min_build": 0
 }
