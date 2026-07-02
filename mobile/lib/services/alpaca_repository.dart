@@ -90,10 +90,8 @@ class AlpacaRepository {
     return AccountSummary(
       equity: equity,
       cash: _dbl(a['cash']),
-      buyingPower: _dbl(a['buying_power']),
-      marginBuyingPower: _dbl(a['regt_buying_power']) > 0
-          ? _dbl(a['regt_buying_power'])
-          : _dbl(a['buying_power']),
+      buyingPower: _dbl(a['cash']),
+      marginBuyingPower: _dbl(a['buying_power']),
       dailyPnl: daily,
       dailyPnlPct: last != 0 ? daily / last * 100 : 0,
     );

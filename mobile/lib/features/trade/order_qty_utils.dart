@@ -10,7 +10,7 @@ double? computeMaxBuyQty({
   final mult = isOptionSymbol(activeSymbol) ? 100.0 : 1.0;
   final perUnit = orderPrice * mult;
   if (perUnit <= 0) return null;
-  final raw = account.buyingPower / perUnit;
+  final raw = account.marginBuyingPower / perUnit;
   if (raw <= 0) return 0;
   if (isOptionSymbol(activeSymbol)) return raw.floorToDouble();
   return (raw * 100).floorToDouble() / 100;

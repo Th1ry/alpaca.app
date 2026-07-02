@@ -1,17 +1,14 @@
-/// In-app OTA update — manifest hosted on GitHub [releases/app-update.json].
+/// In-app OTA — edit [defaultManifestUrl] when releasing a new build.
 class AppUpdateConfig {
   AppUpdateConfig._();
 
-  /// Default manifest for this repo (also editable in Settings).
   static const defaultManifestUrl =
       'https://raw.githubusercontent.com/Th1ry/alpaca.app/main/releases/app-update.json';
 
-  /// Compile-time override; runtime [AppSettings.updateManifestUrl] takes precedence.
   static const manifestUrl = String.fromEnvironment(
     'APP_UPDATE_MANIFEST_URL',
     defaultValue: defaultManifestUrl,
   );
 
-  /// Minimum hours between automatic background checks.
   static const autoCheckIntervalHours = 6;
 }

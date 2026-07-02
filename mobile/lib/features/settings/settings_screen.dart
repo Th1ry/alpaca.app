@@ -6,7 +6,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/alpaca_config.dart';
 import '../../core/app_settings.dart';
-import '../../core/app_update_config.dart';
 
 import '../../core/strings.dart';
 
@@ -44,8 +43,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   final _depthCtrl = TextEditingController();
 
-  final _updateManifestCtrl = TextEditingController();
-
   AlpacaEnv _env = AlpacaEnv.paper;
 
   var _fieldsReady = false;
@@ -77,8 +74,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     _depthCtrl.dispose();
 
-    _updateManifestCtrl.dispose();
-
     super.dispose();
 
   }
@@ -98,8 +93,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _secretCtrl.text = s.alpaca.apiSecret;
 
     _depthCtrl.text = s.depthApiUrl;
-
-    _updateManifestCtrl.text = s.updateManifestUrl;
 
     setState(() => _fieldsReady = true);
 
@@ -365,7 +358,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
 
   Future<void> _checkForUpdate({bool showUpToDate = true}) async {
-    await ref.read(appSettingsProvider.notifier).saveUpdateManifestUrl(_updateManifestCtrl.text);
     final info = await ref.read(appUpdateProvider.notifier).check(respectDismiss: false);
     if (!mounted) return;
     final phase = ref.read(appUpdateProvider).phase;
@@ -761,30 +753,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       : '${S.appVersion} ${_packageInfo!.version} (${_packageInfo!.buildNumber})',
 
                   style: TextStyle(fontSize: 11, color: AppColors.muted2, height: 1.4),
-
-                ),
-
-                const SizedBox(height: 10),
-
-                TextField(
-
-                  controller: _updateManifestCtrl,
-
-                  decoration: InputDecoration(
-
-                    labelText: S.updateManifestUrl,
-
-                    hintText: AppUpdateConfig.defaultManifestUrl,
-
-                    helperText: S.updateManifestHint,
-
-                    helperMaxLines: 2,
-
-                  ),
-
-                  autocorrect: false,
-
-                  keyboardType: TextInputType.url,
 
                 ),
 

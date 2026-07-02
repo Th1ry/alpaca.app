@@ -80,9 +80,9 @@ class AppUpdateInstallProgress {
 }
 
 class AppUpdateService {
-  AppUpdateService({Dio? dio, String? manifestUrl})
+  AppUpdateService({Dio? dio})
       : _dio = dio ?? Dio(),
-        _manifestUrl = (manifestUrl ?? AppUpdateConfig.defaultManifestUrl).trim();
+        _manifestUrl = AppUpdateConfig.manifestUrl.trim();
 
   final Dio _dio;
   final String _manifestUrl;

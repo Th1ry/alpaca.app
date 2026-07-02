@@ -173,9 +173,7 @@ class StringsEn {
   String get updateInstalling => 'Installing — follow system prompts…';
   String get updateUpToDate => 'You are up to date';
   String get updateCheckFailed => 'Update check failed';
-  String get updateDisabled => 'Update manifest URL not configured — set it below';
-  String get updateManifestUrl => 'Update manifest URL';
-  String get updateManifestHint => 'HTTPS URL to app-update.json. Leave empty for default GitHub URL.';
+  String get updateDisabled => 'Update URL not configured';
   String updateAvailableTitle(String version) => 'Update $version available';
   String updateBanner(String version) => 'Version $version available — tap to update';
 

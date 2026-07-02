@@ -48,7 +48,7 @@ class OrderCapacityPanel extends StatelessWidget {
       child: Column(
         children: [
           _CapacityRow(
-            label: S.availableCash,
+            label: S.buyingPower,
             value: acct != null ? _money.format(acct.buyingPower) : '—',
           ),
           const SizedBox(height: 6),

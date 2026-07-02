@@ -158,7 +158,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     children: [
                       OkxMiniStat(label: S.buyingPower, value: money.format(account.buyingPower)),
                       const SizedBox(width: 10),
-                      OkxMiniStat(label: S.cash, value: money.format(account.cash)),
+                      OkxMiniStat(label: S.marginBuyingPower, value: money.format(account.marginBuyingPower)),
                     ],
                   ),
                   const SizedBox(height: 20),

@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/app_update_service.dart';
-import 'app_settings_provider.dart';
 
 enum AppUpdateCheckPhase { idle, checking, upToDate, available, failed, disabled }
 
@@ -31,13 +30,10 @@ class AppUpdateState {
   }
 }
 
-final appUpdateServiceProvider = Provider<AppUpdateService>((ref) {
-  final url = ref.watch(appSettingsProvider).updateManifestUrl;
-  return AppUpdateService(manifestUrl: url);
-});
+final appUpdateServiceProvider = Provider<AppUpdateService>((ref) => AppUpdateService());
 
 final appUpdateProvider = StateNotifierProvider<AppUpdateNotifier, AppUpdateState>((ref) {
-  return AppUpdateNotifier(ref.watch(appUpdateServiceProvider));
+  return AppUpdateNotifier(ref.read(appUpdateServiceProvider));
 });
 
 class AppUpdateNotifier extends StateNotifier<AppUpdateState> {

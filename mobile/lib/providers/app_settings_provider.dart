@@ -10,8 +10,6 @@ import '../core/app_settings.dart';
 
 import '../core/depth_api_config.dart';
 
-import '../core/app_update_config.dart';
-
 import '../core/strings.dart';
 
 import '../core/theme/app_theme.dart';
@@ -31,8 +29,6 @@ const _kPnlColor = 'pnl_color_mode';
 const _kTimezone = 'app_timezone';
 
 const _kDepthApiUrl = 'depth_api_url';
-
-const _kUpdateManifestUrl = 'update_manifest_url';
 
 
 
@@ -77,9 +73,6 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
       timezone: AppTimezone.fromId(p.getString(_kTimezone)),
 
       depthApiUrl: p.getString(_kDepthApiUrl) ?? DepthApiConfig.urlTemplate,
-
-      updateManifestUrl:
-          _nonEmptyUrl(p.getString(_kUpdateManifestUrl)) ?? AppUpdateConfig.defaultManifestUrl,
 
     );
 
@@ -152,20 +145,6 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
     await p.setString(_kDepthApiUrl, trimmed);
 
     state = state.copyWith(depthApiUrl: trimmed);
-
-  }
-
-
-
-  Future<void> saveUpdateManifestUrl(String url) async {
-
-    final p = await SharedPreferences.getInstance();
-
-    final trimmed = url.trim();
-
-    await p.setString(_kUpdateManifestUrl, trimmed);
-
-    state = state.copyWith(updateManifestUrl: trimmed.isEmpty ? AppUpdateConfig.defaultManifestUrl : trimmed);
 
   }
 

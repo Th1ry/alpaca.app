@@ -163,10 +163,10 @@ class AccountSummary {
   factory AccountSummary.fromJson(Map<String, dynamic> j) => AccountSummary(
         equity: (j['equity'] as num).toDouble(),
         cash: (j['cash'] as num).toDouble(),
-        buyingPower: (j['buying_power'] as num).toDouble(),
-        marginBuyingPower: (j['margin_buying_power'] as num?)?.toDouble() ??
-            (j['regt_buying_power'] as num?)?.toDouble() ??
-            (j['buying_power'] as num).toDouble(),
+        buyingPower: (j['cash'] as num).toDouble(),
+        marginBuyingPower: (j['buying_power'] as num?)?.toDouble() ??
+            (j['margin_buying_power'] as num?)?.toDouble() ??
+            (j['cash'] as num).toDouble(),
         dailyPnl: (j['daily_pnl'] as num).toDouble(),
         dailyPnlPct: (j['daily_pnl_pct'] as num).toDouble(),
       );
