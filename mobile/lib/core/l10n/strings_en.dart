@@ -174,6 +174,30 @@ class StringsEn {
   String get updateUpToDate => 'You are up to date';
   String get updateCheckFailed => 'Update check failed';
   String get updateDisabled => 'Update URL not configured';
+  String get updateInstallFailed => 'Update installation failed';
+  String get updatePermissionRequired =>
+      'Allow this app to install unknown apps in system settings, then retry';
+  String get updateDownloadFailed => 'Download failed — check your network and retry';
+  String updateErrorMessage(String code) {
+    switch (code) {
+      case 'PERMISSION_NOT_GRANTED_ERROR':
+        return updatePermissionRequired;
+      case 'DOWNLOAD_ERROR':
+        return updateDownloadFailed;
+      case 'ALREADY_RUNNING_ERROR':
+        return 'An update is already in progress';
+      case 'CHECKSUM_ERROR':
+        return 'Package verification failed — try again later';
+      case 'CANCELED':
+        return 'Download canceled';
+      case 'no_download_url':
+        return 'No download URL for this platform';
+      case 'launch_failed':
+        return 'Could not open download link';
+      default:
+        return code.isEmpty ? updateInstallFailed : '$updateInstallFailed ($code)';
+    }
+  }
   String updateAvailableTitle(String version) => 'Update $version available';
   String updateBanner(String version) => 'Version $version available — tap to update';
 

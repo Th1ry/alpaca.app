@@ -186,6 +186,7 @@ class AppUpdateService {
       await for (final event in OtaUpdate().execute(
         url,
         destinationFilename: 'alpaca_options_update.apk',
+        androidProviderAuthority: 'com.alpaca.options.alpaca_options_app.ota_update_provider',
       )) {
         switch (event.status) {
           case OtaStatus.DOWNLOADING:
@@ -195,6 +196,7 @@ class AppUpdateService {
             );
           case OtaStatus.INSTALLING:
             yield const AppUpdateInstallProgress(phase: AppUpdateInstallPhase.installing);
+            return;
           case OtaStatus.INSTALLATION_DONE:
             yield const AppUpdateInstallProgress(phase: AppUpdateInstallPhase.done);
             return;
@@ -212,7 +214,6 @@ class AppUpdateService {
             return;
         }
       }
-      yield const AppUpdateInstallProgress(phase: AppUpdateInstallPhase.done);
     } catch (e) {
       yield AppUpdateInstallProgress(
         phase: AppUpdateInstallPhase.failed,
