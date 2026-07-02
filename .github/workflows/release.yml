@@ -1,0 +1,110 @@
+name: Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.1.5)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+            git checkout "${TAG}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          VERSION="${TAG#v}"
+          BUILD="$(grep '^version:' mobile/pubspec.yaml | sed 's/.*+//')"
+          APK="alpaca-options-app-v${VERSION}.apk"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "build=${BUILD}" >> "$GITHUB_OUTPUT"
+          echo "apk=${APK}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build release APK
+        working-directory: mobile
+        run: |
+          flutter pub get
+          flutter build apk --release
+
+      - name: Prepare release asset
+        run: |
+          cp mobile/build/app/outputs/flutter-apk/app-release.apk "${{ steps.meta.outputs.apk }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: Release ${{ steps.meta.outputs.tag }}
+          files: ${{ steps.meta.outputs.apk }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update OTA manifest on main
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          BUILD="${{ steps.meta.outputs.build }}"
+          APK="${{ steps.meta.outputs.apk }}"
+          URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${APK}"
+          NOTES="$(git tag -l "${TAG}" --format='%(contents:subject)' 2>/dev/null || true)"
+          if [ -z "${NOTES}" ]; then NOTES="Release ${VERSION}"; fi
+          mkdir -p releases
+          cat > releases/app-update.json <<EOF
+          {
+            "version": "${VERSION}",
+            "build": ${BUILD},
+            "android_url": "${URL}",
+            "windows_url": "",
+            "notes": "${NOTES}",
+            "min_build": 0
+          }
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          cp "$GITHUB_WORKSPACE/releases/app-update.json" releases/app-update.json
+          git add releases/app-update.json
+          if git diff --staged --quiet; then
+            echo "Manifest unchanged"
+          else
+            git commit -m "chore: update app-update.json for ${TAG}"
+            git push origin HEAD:main
+          fi
