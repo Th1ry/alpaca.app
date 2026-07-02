@@ -171,6 +171,29 @@ class StringsZh {
   String get updateUpToDate => '已是最新版本';
   String get updateCheckFailed => '检查更新失败';
   String get updateDisabled => '未配置更新地址';
+  String get updateInstallFailed => '更新安装失败';
+  String get updatePermissionRequired => '请在系统设置中允许本应用「安装未知应用」后重试';
+  String get updateDownloadFailed => '下载失败，请检查网络后重试';
+  String updateErrorMessage(String code) {
+    switch (code) {
+      case 'PERMISSION_NOT_GRANTED_ERROR':
+        return updatePermissionRequired;
+      case 'DOWNLOAD_ERROR':
+        return updateDownloadFailed;
+      case 'ALREADY_RUNNING_ERROR':
+        return '更新正在进行中，请稍候';
+      case 'CHECKSUM_ERROR':
+        return '安装包校验失败，请稍后重试';
+      case 'CANCELED':
+        return '已取消下载';
+      case 'no_download_url':
+        return '未找到适用于当前平台的下载地址';
+      case 'launch_failed':
+        return '无法打开下载链接';
+      default:
+        return code.isEmpty ? updateInstallFailed : '$updateInstallFailed ($code)';
+    }
+  }
   String updateAvailableTitle(String version) => '发现新版本 $version';
   String updateBanner(String version) => '新版本 $version 可用，点击更新';
 

@@ -55,6 +55,7 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
         _progress = p.progress;
         _error = p.message;
       });
+      if (p.phase == AppUpdateInstallPhase.installing) return;
       if (p.phase == AppUpdateInstallPhase.done) {
         if (mounted) Navigator.of(context).pop();
         return;
@@ -93,7 +94,10 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
             ],
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: TextStyle(fontSize: 12, color: AppColors.red)),
+              Text(
+                S.updateErrorMessage(_error!),
+                style: TextStyle(fontSize: 12, color: AppColors.red),
+              ),
             ],
           ],
         ),
