@@ -65,7 +65,7 @@ class AlpacaClient {
 
   bool get configured => _creds.isConfigured;
 
-  /// Verifies credentials against Alpaca trading API.
+  /// Verifies credentials against Alpaca trading + market data APIs.
   Future<AlpacaConnectionInfo> testConnection() async {
     if (!_creds.isConfigured) {
       return const AlpacaConnectionInfo.failure('missing_keys');
@@ -73,6 +73,13 @@ class AlpacaClient {
     try {
       final data = await tradingGet('/v2/account') as Map<String, dynamic>;
       final equity = double.tryParse('${data['equity']}') ?? 0;
+      try {
+        await dataGet(
+          '/v2/stocks/AAPL/bars?symbols=AAPL&timeframe=1Day&limit=1&feed=${_creds.dataFeed}',
+        );
+      } on AlpacaApiException catch (e) {
+        return AlpacaConnectionInfo.failure('Market data: ${e.message}');
+      }
       return AlpacaConnectionInfo.success(
         paper: _creds.isPaper,
         equity: equity,

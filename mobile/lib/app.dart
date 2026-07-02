@@ -220,7 +220,7 @@ class _AlpacaOptionsAppState extends ConsumerState<AlpacaOptionsApp> {
                     children: [
                       HomeScreen(key: ValueKey('home-${settings.language.name}'), onTrade: _goTrade),
                       TradeScreen(
-                        key: ValueKey('$_tradeSymbol:${_tradeSelectedOcc ?? ''}'),
+                        key: ValueKey('trade-${settings.language.name}:${_tradeSelectedOcc ?? ''}'),
                         symbol: _tradeSymbol,
                         selectedOcc: _tradeSelectedOcc,
                         onSymbolChange: (s) => setState(() {

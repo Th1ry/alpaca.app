@@ -361,13 +361,17 @@ class AlpacaRepository {
     final startStr = '${start.year.toString().padLeft(4, '0')}-'
         '${start.month.toString().padLeft(2, '0')}-'
         '${start.day.toString().padLeft(2, '0')}';
-    final data = await _client.dataGet(
-      '/v2/stocks/bars?symbols=$sym&timeframe=${spec.alpaca}&start=$startStr'
-      '&limit=${spec.limit}&feed=${creds.dataFeed}&adjustment=split',
-    ) as Map<String, dynamic>;
-    final raw = _barsRawForSymbol(data, sym);
-    final bars = _parseBars(raw);
-    return _resampleBars(bars, spec.resample);
+    try {
+      final data = await _client.dataGet(
+        '/v2/stocks/bars?symbols=$sym&timeframe=${spec.alpaca}&start=$startStr'
+        '&limit=${spec.limit}&feed=${creds.dataFeed}&adjustment=split',
+      ) as Map<String, dynamic>;
+      final raw = _barsRawForSymbol(data, sym);
+      final bars = _parseBars(raw);
+      return _resampleBars(bars, spec.resample);
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// Daily closes for watchlist line spark (lightweight, cached).

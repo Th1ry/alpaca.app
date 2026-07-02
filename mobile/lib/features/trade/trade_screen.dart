@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
 import '../../providers/alpaca_connection_provider.dart';
 import '../../providers/portfolio_providers.dart';
+import '../../services/alpaca_client.dart';
 import '../../services/api_service.dart';
 import '../../services/ws_service.dart';
 import '../../shared/widgets/floating_capsule_nav.dart';
@@ -54,6 +55,7 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
   String _ratioSymbolKey = '';
   int _tabIndex = 0;
   bool _chartExpanded = true;
+  int _loadGen = 0;
 
   static const _chartExpandedHeight = 220.0;
 
@@ -71,6 +73,7 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
     super.initState();
     _symbol = widget.symbol;
     _ratioSymbolKey = _activeSymbol;
+    _searchCtrl.text = widget.symbol;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       refreshPortfolio(ref);
       ref.read(wsServiceProvider).subscribe([_symbol]);
@@ -95,6 +98,12 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
   @override
   void didUpdateWidget(covariant TradeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.selectedOcc != oldWidget.selectedOcc && widget.selectedOcc != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openPositionBySymbol(widget.selectedOcc!);
+      });
+      return;
+    }
     if (oldWidget.symbol != widget.symbol && widget.selectedOcc == null) {
       _symbol = widget.symbol;
       _selectedOcc = null;
@@ -154,10 +163,19 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
   Future<void> _loadChartBars([String? symbol, String? tf]) async {
     final sym = (symbol ?? _activeSymbol).toUpperCase();
     final timeframe = tf ?? _timeframe;
+    final gen = _loadGen;
     try {
       final bars = await ref.read(apiServiceProvider).getBars(sym, timeframe);
-      if (mounted) setState(() => _bars = bars);
+      if (!mounted || gen != _loadGen) return;
+      setState(() => _bars = bars);
     } catch (_) {}
+  }
+
+  void _loadOptionsChainInBackground({required int gen}) {
+    ref.read(apiServiceProvider).getOptionsChain(_symbol).then((chain) {
+      if (!mounted || gen != _loadGen) return;
+      setState(() => _chain = chain);
+    }).catchError((_) {});
   }
 
   Future<void> _selectOption(String occ, String side) async {
@@ -194,13 +212,14 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
   }
 
   Future<void> _load() async {
+    final gen = ++_loadGen;
     setState(() {
       _loading = true;
       _error = null;
     });
     final api = ref.read(apiServiceProvider);
     if (!api.isConfigured) {
-      if (mounted) {
+      if (mounted && gen == _loadGen) {
         setState(() {
           _loading = false;
           _error = S.apiNotConfigured;
@@ -208,45 +227,63 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
       }
       return;
     }
+
+    final conn = ref.read(alpacaConnectionProvider);
+    if (conn.phase == AlpacaConnPhase.testing) {
+      await Future.any([
+        ref.read(alpacaConnectionProvider.notifier).verify(showSnack: false),
+        Future<void>.delayed(const Duration(seconds: 8)),
+      ]);
+      if (!mounted || gen != _loadGen) return;
+    }
+
     try {
       Quote? quote;
       List<Bar> bars = [];
-      OptionsChain? chain;
       Object? lastErr;
+      final sym = _activeSymbol;
 
       await Future.wait([
-        api.getMarketSnapshot(_activeSymbol).then((snap) {
+        api.getMarketSnapshot(sym).then((snap) {
           quote = snap.quote;
-        }).catchError((Object e) {
+        }).catchError((Object e) async {
           lastErr = e;
+          try {
+            quote = await api.getQuote(sym);
+          } catch (e2) {
+            lastErr ??= e2;
+          }
         }),
-        api.getBars(_activeSymbol, _timeframe).then((b) {
+        api.getBars(sym, _timeframe).then((b) {
           bars = b;
         }).catchError((Object e) {
           lastErr ??= e;
         }),
-        api.getOptionsChain(_symbol).then((c) {
-          chain = c;
-        }).catchError((_) {}),
       ]);
 
-      if (quote == null && bars.isEmpty) {
+      if (!mounted || gen != _loadGen) return;
+
+      final hasQuote = quote != null && quote!.price > 0;
+      if (!hasQuote && bars.isEmpty) {
         throw lastErr ?? Exception(S.loadFailed);
       }
-      if (!mounted) return;
+
       setState(() {
-        if (quote != null) _quote = quote;
+        if (hasQuote) _quote = quote;
         _bars = bars;
-        if (chain != null) _chain = chain;
         _loading = false;
         _error = null;
       });
       _subscribeActiveQuote();
+      _loadOptionsChainInBackground(gen: gen);
+      if (bars.isEmpty && hasQuote) {
+        _loadChartBars(sym, _timeframe);
+      }
     } catch (e) {
-      if (mounted) {
+      if (mounted && gen == _loadGen) {
         setState(() {
           _loading = false;
-          _error = e.toString();
+          _error = e is AlpacaApiException ? e.message : e.toString();
         });
       }
     }
@@ -309,7 +346,11 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
       }
     });
     ref.listen(alpacaConnectionProvider, (prev, next) {
-      if (next.phase == AlpacaConnPhase.ok) _load();
+      if (prev?.phase != AlpacaConnPhase.ok &&
+          next.phase == AlpacaConnPhase.ok &&
+          (_error != null || _quote == null)) {
+        _load();
+      }
     });
 
     final money = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
@@ -329,14 +370,9 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
         SymbolSearchField(
           controller: _searchCtrl,
           onSelected: (sym) {
-            setState(() {
-              _symbol = sym;
-              _selectedOcc = null;
-            });
-            _syncRatioSymbolReset();
-            widget.onSymbolChange?.call(_symbol);
-            _subscribeActiveQuote();
-            _load();
+            final next = sym.toUpperCase();
+            if (next == _symbol.toUpperCase()) return;
+            widget.onSymbolChange?.call(next);
           },
         ),
         if (displayQuote != null)
@@ -362,7 +398,10 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
           child: _loading
               ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
               : _error != null
-                  ? ApiErrorView(onRetry: _load, detail: S.loadFailedHint)
+                  ? ApiErrorView(
+                      onRetry: _load,
+                      detail: _error ?? S.loadFailedHint,
+                    )
                   : _tabIndex == 0
                       ? _buildChartTab(
                           displayQuote: displayQuote,
