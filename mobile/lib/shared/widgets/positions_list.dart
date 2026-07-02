@@ -6,6 +6,7 @@ import '../../core/platform_ui.dart';
 import '../../core/strings.dart';
 import '../../core/symbol_utils.dart';
 import '../../core/theme/app_theme.dart';
+import '../../features/trade/order_qty_utils.dart';
 import '../../features/trade/position_actions.dart';
 import '../../models/models.dart';
 import '../../providers/portfolio_providers.dart';
@@ -14,7 +15,6 @@ import 'okx_ui.dart';
 
 final _money = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 final _pct = NumberFormat('+#0.00;-#0.00');
-final _qtyFmt = NumberFormat('#,##0.##');
 
 class CryptoPositionsTable extends ConsumerStatefulWidget {
   const CryptoPositionsTable({super.key, this.onTapPosition, this.showHeader = true});
@@ -116,7 +116,7 @@ class _PositionsHeader extends StatelessWidget {
             flex: 3,
             child: Padding(
               padding: const EdgeInsets.only(left: 12),
-              child: Text(S.colSize, style: TextStyle(color: AppColors.muted, fontSize: 11)),
+              child: Text(S.colSizeStock, style: TextStyle(color: AppColors.muted, fontSize: 11)),
             ),
           ),
           Expanded(
@@ -279,7 +279,7 @@ class _OptionPositionRow extends ConsumerWidget {
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              TextSpan(text: '  ·  ${_qtyFmt.format(p.qty)}  ·  '),
+                              TextSpan(text: '  ·  ${formatQtyWithUnit(p.qty, isOption: true)}  ·  '),
                               TextSpan(text: '${S.colMark} '),
                               TextSpan(
                                 text: _money.format(p.price),
@@ -370,7 +370,7 @@ class _StockPositionRow extends ConsumerWidget {
                 child: Padding(
                   padding: const EdgeInsets.only(left: 12),
                   child: Text(
-                    _qtyFmt.format(p.qty),
+                    formatQtyWithUnit(p.qty, isOption: false),
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                   ),
                 ),

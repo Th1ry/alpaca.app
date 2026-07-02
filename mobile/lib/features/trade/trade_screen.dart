@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/strings.dart';
 import '../../core/symbol_utils.dart';
+import '../../core/strings.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
 import '../../providers/alpaca_connection_provider.dart';
@@ -619,7 +619,7 @@ class _OrderFormColumn extends StatelessWidget {
         TextField(
           controller: qtyCtrl,
           keyboardType: TextInputType.number,
-          decoration: InputDecoration(labelText: S.qty),
+          decoration: InputDecoration(labelText: S.qtyUnit(isOption: isOption)),
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 4),

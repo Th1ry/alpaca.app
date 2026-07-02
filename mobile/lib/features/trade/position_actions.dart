@@ -1,17 +1,15 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
-import '../../core/strings.dart';
 import '../../core/symbol_utils.dart';
+import '../../core/strings.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
 import '../../providers/portfolio_providers.dart';
 import '../../services/alpaca_client.dart';
 import '../../services/api_service.dart';
-
-final _qtyFmt = NumberFormat('#,##0.##');
+import 'order_qty_utils.dart';
 
 bool _isNoLiquidityError(Object e) {
   if (e is AlpacaApiException && e.statusCode == 409) return true;
@@ -152,7 +150,7 @@ Future<void> showPartialCloseSheet(BuildContext context, WidgetRef ref, Position
                 Text(position.symbol, style: TextStyle(color: AppColors.muted, fontSize: 13)),
                 const SizedBox(height: 16),
                 Text(
-                  '${S.closeRatio}: ${percent.round()}%  ·  ${_qtyFmt.format(closeQty)}',
+                  '${S.closeRatio}: ${percent.round()}%  ·  ${formatQtyWithUnitForSymbol(closeQty, position.symbol)}',
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
                 Slider(
@@ -183,7 +181,7 @@ Future<void> showPartialCloseSheet(BuildContext context, WidgetRef ref, Position
                       builder: (dctx) => AlertDialog(
                         title: Text(S.confirmPartialClose),
                         content: Text(
-                          '${position.symbol}\n${S.closeRatio} ${percent.round()}%  (${_qtyFmt.format(closeQty)})',
+                          '${position.symbol}\n${S.closeRatio} ${percent.round()}%  (${formatQtyWithUnitForSymbol(closeQty, position.symbol)})',
                         ),
                         actions: [
                           TextButton(

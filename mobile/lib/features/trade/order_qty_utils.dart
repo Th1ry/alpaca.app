@@ -1,5 +1,11 @@
+import 'package:intl/intl.dart';
+
+import '../../core/strings.dart';
 import '../../core/symbol_utils.dart';
 import '../../models/models.dart';
+
+final _qtyDisplayFmt = NumberFormat('#,##0.##');
+final _qtyIntFmt = NumberFormat('#,##0');
 
 double? computeMaxBuyQty({
   required AccountSummary? account,
@@ -41,3 +47,13 @@ String formatOrderQty(double qty, {required bool isOption}) {
   if (qty >= 1) return qty.toStringAsFixed(2);
   return qty.toStringAsFixed(4);
 }
+
+String formatQtyWithUnit(num qty, {required bool isOption}) {
+  if (qty <= 0) return '0${S.qtyUnit(isOption: isOption)}';
+  final numStr =
+      isOption ? _qtyIntFmt.format(qty.floor()) : _qtyDisplayFmt.format(qty);
+  return '$numStr${S.qtyUnit(isOption: isOption)}';
+}
+
+String formatQtyWithUnitForSymbol(num qty, String symbol) =>
+    formatQtyWithUnit(qty, isOption: isOptionSymbol(symbol));

@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import '../../core/platform_ui.dart';
 import '../../core/strings.dart';
 import '../../core/theme/app_theme.dart';
+import '../../features/trade/order_qty_utils.dart';
 import '../../models/models.dart';
 import 'okx_ui.dart';
 
@@ -774,7 +775,7 @@ class PositionBar extends StatelessWidget {
               child: Text('${S.orderSide(p.side)} ${p.symbol}',
                   style: const TextStyle(fontWeight: FontWeight.w600)),
             ),
-            Text('${p.qty} @ ${_money.format(p.avgCost)}'),
+            Text('${formatQtyWithUnitForSymbol(p.qty, p.symbol)} @ ${_money.format(p.avgCost)}'),
             const SizedBox(width: 12),
             Text(
               '${_money.format(p.pnl)} (${_pct.format(p.pnlPct)}%)',

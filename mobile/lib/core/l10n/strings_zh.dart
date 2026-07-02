@@ -46,6 +46,8 @@ class StringsZh {
   String get noPosition => '暂无持仓';
   String get colContract => '合约';
   String get colSize => '数量';
+  String get colSizeOption => '张';
+  String get colSizeStock => '股';
   String get colEntry => '开仓均价';
   String get colMark => '标记价格';
   String get colUpnl => '未实现盈亏';
@@ -93,6 +95,8 @@ class StringsZh {
   String get market => '市价';
   String get limit => '限价';
   String get qty => '数量';
+  String get qtyUnitOption => '张';
+  String get qtyUnitStock => '股';
   String get limitPrice => '限价';
   String get orderPrice => '下单价格';
   String get availableCash => '购买力';

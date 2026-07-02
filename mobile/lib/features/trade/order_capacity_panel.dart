@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/strings.dart';
+import '../../core/symbol_utils.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
 import 'order_qty_utils.dart';
 
 final _money = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
-final _qtyFmt = NumberFormat('#,##0.##');
 
 class OrderCapacityPanel extends StatelessWidget {
   const OrderCapacityPanel({
@@ -33,6 +33,7 @@ class OrderCapacityPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final acct = account;
     final isBuy = side.toLowerCase() == 'buy';
+    final isOption = isOptionSymbol(activeSymbol);
     final maxLabel = isBuy ? S.maxBuyQty : S.maxSellQty;
     final maxQty = isBuy
         ? computeMaxBuyQty(account: acct, orderPrice: orderPrice, activeSymbol: activeSymbol)
@@ -59,7 +60,7 @@ class OrderCapacityPanel extends StatelessWidget {
           const SizedBox(height: 6),
           _CapacityRow(
             label: maxLabel,
-            value: maxQty != null ? _qtyFmt.format(maxQty) : '—',
+            value: maxQty != null ? formatQtyWithUnit(maxQty, isOption: isOption) : '—',
             valueColor: isBuy ? AppColors.green : AppColors.red,
           ),
         ],

@@ -56,6 +56,8 @@ class S {
   static String get noPosition => _active.noPosition;
   static String get colContract => _active.colContract;
   static String get colSize => _active.colSize;
+  static String get colSizeOption => _active.colSizeOption;
+  static String get colSizeStock => _active.colSizeStock;
   static String get colEntry => _active.colEntry;
   static String get colMark => _active.colMark;
   static String get colUpnl => _active.colUpnl;
@@ -102,6 +104,10 @@ class S {
   static String get market => _active.market;
   static String get limit => _active.limit;
   static String get qty => _active.qty;
+  static String get qtyUnitOption => _active.qtyUnitOption;
+  static String get qtyUnitStock => _active.qtyUnitStock;
+  static String qtyUnit({required bool isOption}) =>
+      isOption ? qtyUnitOption : qtyUnitStock;
   static String get limitPrice => _active.limitPrice;
   static String get orderPrice => _active.orderPrice;
   static String get availableCash => _active.availableCash;

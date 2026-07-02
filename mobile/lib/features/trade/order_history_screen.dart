@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/strings.dart';
 import '../../core/theme/app_theme.dart';
+import '../../features/trade/order_qty_utils.dart';
 import '../../providers/portfolio_providers.dart';
 
 class OrderHistoryScreen extends ConsumerWidget {
@@ -43,7 +44,7 @@ class OrderHistoryScreen extends ConsumerWidget {
                 return ListTile(
                   title: Text('${S.orderSide(o.side)} ${o.symbol}'),
                   subtitle: Text(
-                    '${o.qty} · ${S.orderTypeLabel(o.type)} · ${S.orderStatus(o.status)}',
+                    '${formatQtyWithUnitForSymbol(o.qty, o.symbol)} · ${S.orderTypeLabel(o.type)} · ${S.orderStatus(o.status)}',
                   ),
                   trailing: o.filledAvgPrice != null
                       ? Text(NumberFormat.currency(symbol: '\$').format(o.filledAvgPrice))

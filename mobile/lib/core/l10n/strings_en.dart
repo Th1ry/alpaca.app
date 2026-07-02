@@ -46,6 +46,8 @@ class StringsEn {
   String get noPosition => 'No position';
   String get colContract => 'Symbol';
   String get colSize => 'Size';
+  String get colSizeOption => 'Contracts';
+  String get colSizeStock => 'Shares';
   String get colEntry => 'Entry';
   String get colMark => 'Mark';
   String get colUpnl => 'Unrealized P&L';
@@ -95,6 +97,8 @@ class StringsEn {
   String get market => 'Market';
   String get limit => 'Limit';
   String get qty => 'Qty';
+  String get qtyUnitOption => ' ct';
+  String get qtyUnitStock => ' sh';
   String get limitPrice => 'Limit Price';
   String get orderPrice => 'Order Price';
   String get availableCash => 'Buying Power';
