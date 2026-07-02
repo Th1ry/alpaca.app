@@ -1,8 +1,8 @@
 {
-  "version": "0.1.6",
-  "build": 7,
-  "android_url": "https://github.com/Th1ry/alpaca.app/releases/download/v0.1.6/alpaca-options-app-v0.1.6.apk",
+  "version": "0.1.7",
+  "build": 8,
+  "android_url": "https://github.com/Th1ry/alpaca.app/releases/download/v0.1.7/alpaca-options-app-v0.1.7.apk",
   "windows_url": "",
-  "notes": "修复买一卖一卡住；五档/买一卖一数据源统一；有自定义 API 用用户数据，否则仅 1 档",
+  "notes": "设置页可配置 OTA 更新地址，默认已填入 GitHub manifest",
   "min_build": 0
 }

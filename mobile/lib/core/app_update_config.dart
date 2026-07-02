@@ -2,11 +2,14 @@
 class AppUpdateConfig {
   AppUpdateConfig._();
 
-  /// Raw JSON URL for update manifest.
+  /// Default manifest for this repo (also editable in Settings).
+  static const defaultManifestUrl =
+      'https://raw.githubusercontent.com/Th1ry/alpaca.app/main/releases/app-update.json';
+
+  /// Compile-time override; runtime [AppSettings.updateManifestUrl] takes precedence.
   static const manifestUrl = String.fromEnvironment(
     'APP_UPDATE_MANIFEST_URL',
-    defaultValue:
-        'https://raw.githubusercontent.com/Th1ry/alpaca.app/main/releases/app-update.json',
+    defaultValue: defaultManifestUrl,
   );
 
   /// Minimum hours between automatic background checks.

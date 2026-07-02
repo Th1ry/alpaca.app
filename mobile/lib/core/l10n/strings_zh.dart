@@ -170,7 +170,9 @@ class StringsZh {
   String get updateInstalling => '正在安装，请按系统提示完成…';
   String get updateUpToDate => '已是最新版本';
   String get updateCheckFailed => '检查更新失败';
-  String get updateDisabled => '未配置更新地址，请在代码中设置 AppUpdateConfig.manifestUrl';
+  String get updateDisabled => '未配置更新地址，请在下方填写更新清单 URL';
+  String get updateManifestUrl => '更新清单 URL';
+  String get updateManifestHint => '指向 app-update.json 的 HTTPS 地址，留空则使用默认 GitHub 地址';
   String updateAvailableTitle(String version) => '发现新版本 $version';
   String updateBanner(String version) => '新版本 $version 可用，点击更新';
 

@@ -80,23 +80,25 @@ class AppUpdateInstallProgress {
 }
 
 class AppUpdateService {
-  AppUpdateService({Dio? dio}) : _dio = dio ?? Dio();
+  AppUpdateService({Dio? dio, String? manifestUrl})
+      : _dio = dio ?? Dio(),
+        _manifestUrl = (manifestUrl ?? AppUpdateConfig.defaultManifestUrl).trim();
 
   final Dio _dio;
+  final String _manifestUrl;
   static const _dismissedBuildKey = 'app_update_dismissed_build';
   static const _lastCheckKey = 'app_update_last_check_ms';
 
-  bool get isEnabled => AppUpdateConfig.manifestUrl.trim().isNotEmpty;
+  bool get isEnabled => _manifestUrl.isNotEmpty;
 
   Future<PackageInfo> packageInfo() => PackageInfo.fromPlatform();
 
   Future<AppUpdateInfo?> checkForUpdate({bool respectDismiss = true}) async {
-    final url = AppUpdateConfig.manifestUrl.trim();
-    if (url.isEmpty) return null;
+    if (!isEnabled) return null;
 
     final pkg = await packageInfo();
     final currentBuild = int.tryParse(pkg.buildNumber) ?? 0;
-    final manifest = await _fetchManifest(url);
+    final manifest = await _fetchManifest(_manifestUrl);
 
     if (manifest.build <= currentBuild) return null;
 

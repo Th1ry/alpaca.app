@@ -180,6 +180,8 @@ class S {
   static String get updateUpToDate => _active.updateUpToDate;
   static String get updateCheckFailed => _active.updateCheckFailed;
   static String get updateDisabled => _active.updateDisabled;
+  static String get updateManifestUrl => _active.updateManifestUrl;
+  static String get updateManifestHint => _active.updateManifestHint;
   static String updateAvailableTitle(String version) => _active.updateAvailableTitle(version);
   static String updateBanner(String version) => _active.updateBanner(version);
 
