@@ -71,7 +71,8 @@ class _CryptoPositionsTableState extends ConsumerState<CryptoPositionsTable> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildToggle(stocks.length, options.length),
-            if (widget.showHeader) const _PositionsHeader(),
+            if (widget.showHeader)
+              _showOptions ? const _OptionPositionsHeader() : const _PositionsHeader(),
             if (list.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -132,8 +133,87 @@ class _PositionsHeader extends StatelessWidget {
   }
 }
 
+class _OptionPositionsHeader extends StatelessWidget {
+  const _OptionPositionsHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(S.colContract, style: TextStyle(color: AppColors.muted, fontSize: 11)),
+          ),
+          SizedBox(
+            width: _pnlColumnWidth,
+            child: Text(
+              S.colUpnl,
+              textAlign: TextAlign.end,
+              style: TextStyle(color: AppColors.muted, fontSize: 11),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+const _pnlColumnWidth = 92.0;
+
+class _PnlColumn extends StatelessWidget {
+  const _PnlColumn({required this.position});
+
+  final Position position;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = position;
+    final pnlColor_ = pnlColor(p.pnl);
+    return SizedBox(
+      width: _pnlColumnWidth,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            _money.format(p.pnl),
+            maxLines: 1,
+            overflow: TextOverflow.clip,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: pnlColor_,
+            ),
+          ),
+          Text(
+            '${_pct.format(p.pnlPct)}%',
+            maxLines: 1,
+            overflow: TextOverflow.clip,
+            style: TextStyle(fontSize: 11, color: pnlColor_),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CryptoPositionRow extends ConsumerWidget {
   const _CryptoPositionRow({required this.position, this.onTapSymbol});
+
+  final Position position;
+  final VoidCallback? onTapSymbol;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (isOptionSymbol(position.symbol)) {
+      return _OptionPositionRow(position: position, onTapSymbol: onTapSymbol);
+    }
+    return _StockPositionRow(position: position, onTapSymbol: onTapSymbol);
+  }
+}
+
+class _OptionPositionRow extends ConsumerWidget {
+  const _OptionPositionRow({required this.position, this.onTapSymbol});
 
   final Position position;
   final VoidCallback? onTapSymbol;
@@ -143,7 +223,110 @@ class _CryptoPositionRow extends ConsumerWidget {
     final p = position;
     final isLong = p.side.toLowerCase() != 'short';
     final sideColor = isLong ? AppColors.green : AppColors.red;
-    final pnlColor_ = pnlColor(p.pnl);
+    final worthless = isWorthlessOption(p);
+
+    return GlassPanel(
+      borderRadius: OkxRadius.md,
+      blur: 14,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: onTapSymbol,
+                  child: Text(
+                    formatOptionPositionLabel(p.symbol),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: onTapSymbol != null ? AppColors.accentSoft : AppColors.text,
+                      decoration: onTapSymbol != null ? TextDecoration.underline : null,
+                      decorationColor: AppColors.muted,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              _SideBadge(label: S.positionSide(p.side), color: sideColor),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+                        child: Text.rich(
+                          TextSpan(
+                            style: TextStyle(fontSize: 12, color: AppColors.muted, height: 1.25),
+                            children: [
+                              TextSpan(text: '${S.colEntry} '),
+                              TextSpan(
+                                text: _money.format(p.avgCost),
+                                style: TextStyle(
+                                  color: AppColors.text,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              TextSpan(text: '  ·  ${_qtyFmt.format(p.qty)}  ·  '),
+                              TextSpan(text: '${S.colMark} '),
+                              TextSpan(
+                                text: _money.format(p.price),
+                                style: TextStyle(
+                                  color: AppColors.text,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          maxLines: 1,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              _PnlColumn(position: p),
+            ],
+          ),
+          if (worthless) ...[
+            const SizedBox(height: 6),
+            Text(
+              S.noLiquidityHint,
+              style: TextStyle(fontSize: 11, color: AppColors.muted),
+            ),
+          ],
+          const SizedBox(height: 8),
+          _PositionActionRow(position: p, worthless: worthless),
+        ],
+      ),
+    );
+  }
+}
+
+class _StockPositionRow extends ConsumerWidget {
+  const _StockPositionRow({required this.position, this.onTapSymbol});
+
+  final Position position;
+  final VoidCallback? onTapSymbol;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = position;
+    final isLong = p.side.toLowerCase() != 'short';
+    final sideColor = isLong ? AppColors.green : AppColors.red;
     final worthless = isWorthlessOption(p);
 
     return GlassPanel(
@@ -164,9 +347,7 @@ class _CryptoPositionRow extends ConsumerWidget {
                       child: GestureDetector(
                         onTap: onTapSymbol,
                         child: Text(
-                          isOptionSymbol(p.symbol)
-                              ? formatOptionPositionLabel(p.symbol)
-                              : p.symbol,
+                          p.symbol,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -196,23 +377,7 @@ class _CryptoPositionRow extends ConsumerWidget {
               ),
               Expanded(
                 flex: 4,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      _money.format(p.pnl),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: pnlColor_,
-                      ),
-                    ),
-                    Text(
-                      '${_pct.format(p.pnlPct)}%',
-                      style: TextStyle(fontSize: 11, color: pnlColor_),
-                    ),
-                  ],
-                ),
+                child: _PnlColumn(position: p),
               ),
             ],
           ),
@@ -233,77 +398,90 @@ class _CryptoPositionRow extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: worthless
-                      ? () => confirmDismissPosition(context, ref, p)
-                      : () => confirmQuickClose(context, ref, p),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: worthless ? AppColors.muted : AppColors.red,
-                    side: BorderSide(
-                      color: worthless
-                          ? AppColors.muted.withValues(alpha: 0.5)
-                          : AppColors.red.withValues(alpha: 0.6),
-                    ),
-                    backgroundColor: worthless ? Colors.white.withValues(alpha: 0.04) : AppColors.redDim,
-                    padding: EdgeInsets.symmetric(
-                      vertical: PlatformUi.isMobile ? 10 : 6,
-                    ),
-                  ),
-                  child: Text(
-                    worthless ? S.dismissPosition : S.quickClose,
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                ),
-              ),
-              if (!worthless) ...[
-                const SizedBox(width: 6),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => showPartialCloseSheet(context, ref, p),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: 0.06),
-                      padding: EdgeInsets.symmetric(
-                      vertical: PlatformUi.isMobile ? 10 : 6,
-                    ),
-                    ),
-                    child: Text(S.partialClose, style: const TextStyle(fontSize: 11)),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => showTpSlSheet(context, ref, p),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: 0.06),
-                      padding: EdgeInsets.symmetric(
-                      vertical: PlatformUi.isMobile ? 10 : 6,
-                    ),
-                    ),
-                    child: Text(S.tpSl, style: const TextStyle(fontSize: 11)),
-                  ),
-                ),
-              ] else ...[
-                const SizedBox(width: 6),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => confirmQuickClose(context, ref, p),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: 0.06),
-                      padding: EdgeInsets.symmetric(
-                      vertical: PlatformUi.isMobile ? 10 : 6,
-                    ),
-                    ),
-                    child: Text(S.tryCloseAnyway, style: const TextStyle(fontSize: 11)),
-                  ),
-                ),
-              ],
-            ],
-          ),
+          _PositionActionRow(position: p, worthless: worthless),
         ],
       ),
+    );
+  }
+}
+
+class _PositionActionRow extends ConsumerWidget {
+  const _PositionActionRow({required this.position, required this.worthless});
+
+  final Position position;
+  final bool worthless;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = position;
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: worthless
+                ? () => confirmDismissPosition(context, ref, p)
+                : () => confirmQuickClose(context, ref, p),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: worthless ? AppColors.muted : AppColors.red,
+              side: BorderSide(
+                color: worthless
+                    ? AppColors.muted.withValues(alpha: 0.5)
+                    : AppColors.red.withValues(alpha: 0.6),
+              ),
+              backgroundColor: worthless ? Colors.white.withValues(alpha: 0.04) : AppColors.redDim,
+              padding: EdgeInsets.symmetric(
+                vertical: PlatformUi.isMobile ? 10 : 6,
+              ),
+            ),
+            child: Text(
+              worthless ? S.dismissPosition : S.quickClose,
+              style: const TextStyle(fontSize: 11),
+            ),
+          ),
+        ),
+        if (!worthless) ...[
+          const SizedBox(width: 6),
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => showPartialCloseSheet(context, ref, p),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Colors.white.withValues(alpha: 0.06),
+                padding: EdgeInsets.symmetric(
+                  vertical: PlatformUi.isMobile ? 10 : 6,
+                ),
+              ),
+              child: Text(S.partialClose, style: const TextStyle(fontSize: 11)),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => showTpSlSheet(context, ref, p),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Colors.white.withValues(alpha: 0.06),
+                padding: EdgeInsets.symmetric(
+                  vertical: PlatformUi.isMobile ? 10 : 6,
+                ),
+              ),
+              child: Text(S.tpSl, style: const TextStyle(fontSize: 11)),
+            ),
+          ),
+        ] else ...[
+          const SizedBox(width: 6),
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => confirmQuickClose(context, ref, p),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Colors.white.withValues(alpha: 0.06),
+                padding: EdgeInsets.symmetric(
+                  vertical: PlatformUi.isMobile ? 10 : 6,
+                ),
+              ),
+              child: Text(S.tryCloseAnyway, style: const TextStyle(fontSize: 11)),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

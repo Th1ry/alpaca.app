@@ -107,7 +107,7 @@ class StringsZh {
   String get bidAsk => '盘口';
   String get bid1 => '买一';
   String get ask1 => '卖一';
-  String get lastPrice => '最新';
+  String get lastPrice => '最新成交价';
   String get noBidAsk => '暂无盘口';
   String get colPrice => '价格';
   String get colDepthQty => '数量';
@@ -118,6 +118,7 @@ class StringsZh {
   String get put => '看跌';
   String get tabChart => '图表';
   String get tabOptionsChain => '期权链';
+  String get backToChart => '返回图表';
   String get currentPosition => '当前持仓';
   String get apiSection => 'Alpaca API';
   String get apiLocalOnly => 'Key 仅保存在本设备，App 直连 Alpaca（Paper / Live）';
@@ -126,6 +127,8 @@ class StringsZh {
   String get alpacaEnvLive => '实盘 Live';
   String get alpacaApiKey => 'API Key';
   String get alpacaApiSecret => 'API Secret';
+  String get depthApiUrl => '五档 API 地址';
+  String get depthApiHint => '可选。返回 JSON：{"asks":[{"price":1.23,"size":100}],"bids":[...]}，URL 中用 {symbol} 占位。留空则仅显示 Alpaca 买一/卖一。';
   String get apiSaved => 'Alpaca 已保存';
   String get apiTestConnection => '测试连接';
   String get apiStatusTesting => '正在连接 Alpaca…';
@@ -159,6 +162,17 @@ class StringsZh {
   String get save => '保存';
   String get settingsSaved => '设置已保存';
   String get appVersion => '版本';
+  String get checkForUpdate => '检查更新';
+  String get updateAvailableBody => '建议更新以获得最新功能与修复。';
+  String get updateNow => '立即更新';
+  String get updateLater => '稍后';
+  String get updateDownloading => '正在下载…';
+  String get updateInstalling => '正在安装，请按系统提示完成…';
+  String get updateUpToDate => '已是最新版本';
+  String get updateCheckFailed => '检查更新失败';
+  String get updateDisabled => '未配置更新地址，请在代码中设置 AppUpdateConfig.manifestUrl';
+  String updateAvailableTitle(String version) => '发现新版本 $version';
+  String updateBanner(String version) => '新版本 $version 可用，点击更新';
 
   String winRateOpens(int total, int wins, int losses) =>
       '共 $total 笔开仓，$wins 胜 / $losses 负';

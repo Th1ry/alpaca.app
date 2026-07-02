@@ -13,9 +13,11 @@ import '../../core/theme/app_theme.dart';
 
 import '../../providers/alpaca_connection_provider.dart';
 import '../../providers/app_settings_provider.dart';
+import '../../providers/app_update_provider.dart';
 
 import '../../shared/widgets/floating_capsule_nav.dart';
 import '../../shared/widgets/okx_ui.dart';
+import 'app_update_dialog.dart';
 
 
 
@@ -38,6 +40,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _keyCtrl = TextEditingController();
 
   final _secretCtrl = TextEditingController();
+
+  final _depthCtrl = TextEditingController();
 
   AlpacaEnv _env = AlpacaEnv.paper;
 
@@ -68,6 +72,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     _secretCtrl.dispose();
 
+    _depthCtrl.dispose();
+
     super.dispose();
 
   }
@@ -85,6 +91,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _keyCtrl.text = s.alpaca.apiKey;
 
     _secretCtrl.text = s.alpaca.apiSecret;
+
+    _depthCtrl.text = s.depthApiUrl;
 
     setState(() => _fieldsReady = true);
 
@@ -129,6 +137,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     final ok = await ref.read(alpacaConnectionProvider.notifier).save(creds);
+    await ref.read(appSettingsProvider.notifier).saveDepthApiUrl(_depthCtrl.text);
     if (!mounted) return;
     final conn = ref.read(alpacaConnectionProvider);
     _showApiSnack(
@@ -144,6 +153,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     if (!mounted) return;
 
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
 
       SnackBar(
@@ -152,7 +162,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
         behavior: SnackBarBehavior.floating,
 
-        duration: const Duration(seconds: 4),
+        duration: const Duration(seconds: 3),
 
         content: Column(
 
@@ -336,12 +346,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     if (!mounted) return;
 
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
 
-      SnackBar(content: Text(S.settingsSaved)),
+      SnackBar(content: Text(S.settingsSaved), duration: const Duration(seconds: 3)),
 
     );
 
+  }
+
+
+
+  Future<void> _checkForUpdate({bool showUpToDate = true}) async {
+    final info = await ref.read(appUpdateProvider.notifier).check(respectDismiss: false);
+    if (!mounted) return;
+    final phase = ref.read(appUpdateProvider).phase;
+    if (info != null) {
+      await showAppUpdateDialog(
+        context,
+        info: info,
+        onLater: () => ref.read(appUpdateProvider.notifier).dismiss(info),
+        onInstall: () => ref.read(appUpdateServiceProvider).installUpdate(info),
+      );
+      return;
+    }
+    if (!showUpToDate) return;
+    final msg = switch (phase) {
+      AppUpdateCheckPhase.disabled => S.updateDisabled,
+      AppUpdateCheckPhase.failed => '${S.updateCheckFailed}: ${ref.read(appUpdateProvider).error ?? ''}',
+      AppUpdateCheckPhase.upToDate => S.updateUpToDate,
+      _ => S.updateCheckFailed,
+    };
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), duration: const Duration(seconds: 3)),
+    );
   }
 
 
@@ -353,6 +391,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final settings = ref.watch(appSettingsProvider);
     final conn = ref.watch(alpacaConnectionProvider);
     final busy = conn.busy;
+    final updateState = ref.watch(appUpdateProvider);
 
 
 
@@ -486,6 +525,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   obscureText: true,
 
                   autocorrect: false,
+
+                ),
+
+                const SizedBox(height: 10),
+
+                TextField(
+
+                  controller: _depthCtrl,
+
+                  decoration: InputDecoration(
+
+                    labelText: S.depthApiUrl,
+
+                    hintText: 'https://api.example.com/depth/{symbol}',
+
+                    helperText: S.depthApiHint,
+
+                    helperMaxLines: 3,
+
+                  ),
+
+                  autocorrect: false,
+
+                  keyboardType: TextInputType.url,
 
                 ),
 
@@ -677,15 +740,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           Center(
 
-            child: Text(
+            child: Column(
 
-              _packageInfo == null
+              children: [
 
-                  ? ''
+                Text(
 
-                  : '${S.appVersion} ${_packageInfo!.version} (${_packageInfo!.buildNumber})',
+                  _packageInfo == null
 
-              style: TextStyle(fontSize: 11, color: AppColors.muted2, height: 1.4),
+                      ? ''
+
+                      : '${S.appVersion} ${_packageInfo!.version} (${_packageInfo!.buildNumber})',
+
+                  style: TextStyle(fontSize: 11, color: AppColors.muted2, height: 1.4),
+
+                ),
+
+                const SizedBox(height: 10),
+
+                OutlinedButton.icon(
+
+                  onPressed: updateState.phase == AppUpdateCheckPhase.checking
+
+                      ? null
+
+                      : () => _checkForUpdate(),
+
+                  icon: updateState.phase == AppUpdateCheckPhase.checking
+
+                      ? SizedBox(
+
+                          width: 16,
+
+                          height: 16,
+
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.muted),
+
+                        )
+
+                      : const Icon(Icons.system_update_alt, size: 18),
+
+                  label: Text(S.checkForUpdate),
+
+                ),
+
+              ],
 
             ),
 

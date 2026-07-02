@@ -17,12 +17,14 @@ class TradeQuoteHeader extends StatelessWidget {
     required this.quote,
     required this.money,
     required this.pct,
+    this.orderBook,
   });
 
   final String symbol;
   final Quote quote;
   final String Function(double) money;
   final String Function(double) pct;
+  final OrderBook? orderBook;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +42,11 @@ class TradeQuoteHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(symbol, style: TextStyle(fontSize: 14, color: AppColors.muted)),
+                const SizedBox(height: 2),
+                Text(
+                  S.lastPrice,
+                  style: TextStyle(fontSize: 10, color: AppColors.muted2, fontWeight: FontWeight.w500),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   money(quote.price),
@@ -61,7 +68,7 @@ class TradeQuoteHeader extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             flex: 6,
-            child: BidAskStrip(quote: quote),
+            child: BidAskStrip(orderBook: orderBook, quote: quote),
           ),
         ],
       ),
@@ -69,19 +76,39 @@ class TradeQuoteHeader extends StatelessWidget {
   }
 }
 
-/// Compact bid / ask beside the symbol header.
+/// Compact bid / ask beside the symbol header — uses order book L1 when available.
 class BidAskStrip extends StatelessWidget {
-  const BidAskStrip({super.key, this.quote});
+  const BidAskStrip({super.key, this.quote, this.orderBook});
 
   final Quote? quote;
+  final OrderBook? orderBook;
+
+  OrderBookLevel? get _bid1 {
+    final levels = orderBook?.bids ?? const <OrderBookLevel>[];
+    if (levels.isEmpty) return null;
+    final l = levels.first;
+    return l.isReal && l.price > 0 ? l : null;
+  }
+
+  OrderBookLevel? get _ask1 {
+    final levels = orderBook?.asks ?? const <OrderBookLevel>[];
+    if (levels.isEmpty) return null;
+    final l = levels.first;
+    return l.isReal && l.price > 0 ? l : null;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final bid = _bid1;
+    final ask = _ask1;
     final q = quote;
-    final hasAsk = q != null && q.ask > 0;
-    final hasBid = q != null && q.bid > 0;
 
-    if (q == null || (!hasAsk && !hasBid)) {
+    final bidPrice = bid?.price ?? (q != null && q.bid > 0 ? q.bid : null);
+    final bidSize = bid?.size ?? (q != null && q.bid > 0 ? q.bidSize : null);
+    final askPrice = ask?.price ?? (q != null && q.ask > 0 ? q.ask : null);
+    final askSize = ask?.size ?? (q != null && q.ask > 0 ? q.askSize : null);
+
+    if (bidPrice == null && askPrice == null) {
       return Align(
         alignment: Alignment.centerRight,
         child: Text(S.noBidAsk, style: TextStyle(color: AppColors.muted, fontSize: 10)),
@@ -93,8 +120,8 @@ class BidAskStrip extends StatelessWidget {
         Expanded(
           child: _DepthColumn(
             label: S.bid1,
-            price: hasBid ? q.bid : null,
-            size: hasBid ? q.bidSize : null,
+            price: bidPrice,
+            size: bidSize,
             color: AppColors.green,
           ),
         ),
@@ -102,8 +129,8 @@ class BidAskStrip extends StatelessWidget {
         Expanded(
           child: _DepthColumn(
             label: S.ask1,
-            price: hasAsk ? q.ask : null,
-            size: hasAsk ? q.askSize : null,
+            price: askPrice,
+            size: askSize,
             color: AppColors.red,
           ),
         ),

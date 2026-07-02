@@ -11,7 +11,11 @@ final alpacaCredentialsProvider = Provider<AlpacaCredentials>((ref) {
 });
 
 final alpacaRepositoryProvider = Provider<AlpacaRepository>((ref) {
-  return AlpacaRepository(ref.watch(alpacaCredentialsProvider));
+  final settings = ref.watch(appSettingsProvider);
+  return AlpacaRepository(
+    ref.watch(alpacaCredentialsProvider),
+    depthApiUrl: settings.depthApiUrl,
+  );
 });
 
 /// Back-compat alias — app code uses [apiServiceProvider].
@@ -39,6 +43,10 @@ class ApiService {
 
   Future<Quote> getQuote(String symbol) => _repo.getQuote(symbol);
 
+  Future<Quote> getQuoteLive(String symbol) => _repo.getQuoteLive(symbol);
+
+  Future<MarketSnapshot> getMarketSnapshot(String symbol) => _repo.getMarketSnapshot(symbol);
+
   Future<OrderBook> getOrderBook(String symbol, {int levels = 5}) =>
       _repo.getOrderBook(symbol, levels: levels);
 
@@ -46,6 +54,8 @@ class ApiService {
 
   Future<List<Bar>> getBars(String symbol, String timeframe) =>
       _repo.getBars(symbol, timeframe);
+
+  Future<List<Bar>> getSparklineBars(String symbol) => _repo.getSparklineBars(symbol);
 
   Future<List<Map<String, String>>> search(String q) async {
     final rows = await _repo.searchSymbols(q);

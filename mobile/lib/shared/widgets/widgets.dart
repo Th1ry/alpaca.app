@@ -193,35 +193,7 @@ class WatchlistTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spark = sparkline.length > 1
-        ? IgnorePointer(
-            child: SizedBox(
-              width: 56,
-              height: 28,
-              child: LineChart(
-                LineChartData(
-                  gridData: const FlGridData(show: false),
-                  titlesData: const FlTitlesData(show: false),
-                  borderData: FlBorderData(show: false),
-                  lineTouchData: const LineTouchData(enabled: false),
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: [
-                        for (var i = 0; i < sparkline.length; i++)
-                          FlSpot(i.toDouble(), sparkline[i].close),
-                      ],
-                      isCurved: true,
-                      color: pnlColor(quote.change),
-                      barWidth: 1.2,
-                      dotData: const FlDotData(show: false),
-                      belowBarData: BarAreaData(show: false),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          )
-        : null;
+    final spark = _buildSparkChart(sparkline, quote.change);
 
     return GlassPanel(
       margin: const EdgeInsets.only(bottom: 8),
@@ -236,6 +208,58 @@ class WatchlistTile extends StatelessWidget {
         changePct: quote.changePct,
         onTap: onTap,
         trailing: spark,
+      ),
+    );
+  }
+
+  Widget? _buildSparkChart(List<Bar> bars, double change) {
+    if (bars.isEmpty) return null;
+    var points = bars.length > 48 ? bars.sublist(bars.length - 48) : bars;
+    if (points.length == 1) {
+      final b = points.first;
+      points = [
+        b,
+        Bar(time: b.time + 60, open: b.close, high: b.close, low: b.close, close: b.close),
+      ];
+    }
+    final closes = points.map((b) => b.close).toList();
+    var minC = closes.reduce((a, b) => a < b ? a : b);
+    var maxC = closes.reduce((a, b) => a > b ? a : b);
+    if (minC == maxC) {
+      minC -= minC.abs() * 0.002 + 0.01;
+      maxC += maxC.abs() * 0.002 + 0.01;
+    }
+    final pad = (maxC - minC) * 0.06;
+
+    return IgnorePointer(
+      child: SizedBox(
+        width: 56,
+        height: 28,
+        child: LineChart(
+          LineChartData(
+            minX: 0,
+            maxX: (points.length - 1).toDouble(),
+            minY: minC - pad,
+            maxY: maxC + pad,
+            gridData: const FlGridData(show: false),
+            titlesData: const FlTitlesData(show: false),
+            borderData: FlBorderData(show: false),
+            lineTouchData: const LineTouchData(enabled: false),
+            clipData: const FlClipData.all(),
+            lineBarsData: [
+              LineChartBarData(
+                spots: [
+                  for (var i = 0; i < points.length; i++) FlSpot(i.toDouble(), points[i].close),
+                ],
+                isCurved: false,
+                color: pnlColor(change),
+                barWidth: 1.0,
+                dotData: const FlDotData(show: false),
+                belowBarData: BarAreaData(show: false),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

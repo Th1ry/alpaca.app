@@ -37,10 +37,8 @@ class TradeScreen extends ConsumerStatefulWidget {
   ConsumerState<TradeScreen> createState() => _TradeScreenState();
 }
 
-class _TradeScreenState extends ConsumerState<TradeScreen>
-    with SingleTickerProviderStateMixin {
+class _TradeScreenState extends ConsumerState<TradeScreen> {
   late String _symbol;
-  late TabController _tabCtrl;
   Quote? _quote;
   List<Bar> _bars = [];
   OptionsChain? _chain;
@@ -73,12 +71,6 @@ class _TradeScreenState extends ConsumerState<TradeScreen>
     super.initState();
     _symbol = widget.symbol;
     _ratioSymbolKey = _activeSymbol;
-    _tabCtrl = TabController(length: 2, vsync: this);
-    _tabCtrl.addListener(() {
-      if (!_tabCtrl.indexIsChanging && _tabCtrl.index != _tabIndex) {
-        setState(() => _tabIndex = _tabCtrl.index);
-      }
-    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       refreshPortfolio(ref);
       ref.read(wsServiceProvider).subscribe([_symbol]);
@@ -94,7 +86,6 @@ class _TradeScreenState extends ConsumerState<TradeScreen>
 
   @override
   void dispose() {
-    _tabCtrl.dispose();
     _qtyCtrl.dispose();
     _limitCtrl.dispose();
     _searchCtrl.dispose();
@@ -155,7 +146,9 @@ class _TradeScreenState extends ConsumerState<TradeScreen>
   }
 
   void _subscribeActiveQuote() {
-    ref.read(wsServiceProvider).subscribe([_activeSymbol]);
+    final ws = ref.read(wsServiceProvider);
+    ws.subscribe([_activeSymbol]);
+    ws.setFocusSymbol(_activeSymbol);
   }
 
   Future<void> _loadChartBars([String? symbol, String? tf]) async {
@@ -180,7 +173,7 @@ class _TradeScreenState extends ConsumerState<TradeScreen>
     try {
       final api = ref.read(apiServiceProvider);
       final results = await Future.wait([
-        api.getQuote(occ),
+        api.getMarketSnapshot(occ).then((s) => s.quote),
         api.getBars(occ, _timeframe),
       ]);
       if (!mounted) return;
@@ -218,21 +211,25 @@ class _TradeScreenState extends ConsumerState<TradeScreen>
     try {
       Quote? quote;
       List<Bar> bars = [];
-      Object? lastErr;
-      try {
-        quote = await api.getQuote(_activeSymbol);
-      } catch (e) {
-        lastErr = e;
-      }
-      try {
-        bars = await api.getBars(_activeSymbol, _timeframe);
-      } catch (e) {
-        lastErr ??= e;
-      }
       OptionsChain? chain;
-      try {
-        chain = await api.getOptionsChain(_symbol);
-      } catch (_) {}
+      Object? lastErr;
+
+      await Future.wait([
+        api.getMarketSnapshot(_activeSymbol).then((snap) {
+          quote = snap.quote;
+        }).catchError((Object e) {
+          lastErr = e;
+        }),
+        api.getBars(_activeSymbol, _timeframe).then((b) {
+          bars = b;
+        }).catchError((Object e) {
+          lastErr ??= e;
+        }),
+        api.getOptionsChain(_symbol).then((c) {
+          chain = c;
+        }).catchError((_) {}),
+      ]);
+
       if (quote == null && bars.isEmpty) {
         throw lastErr ?? Exception(S.loadFailed);
       }
@@ -257,7 +254,10 @@ class _TradeScreenState extends ConsumerState<TradeScreen>
 
   void _goToChartTab() {
     setState(() => _tabIndex = 0);
-    _tabCtrl.animateTo(0);
+  }
+
+  void _goToOptionsTab() {
+    setState(() => _tabIndex = 1);
   }
 
   String _formatOrderPrice(double price) =>
@@ -315,6 +315,7 @@ class _TradeScreenState extends ConsumerState<TradeScreen>
     final money = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
     final pct = NumberFormat('+#0.00;-#0.00');
     final liveQuote = ref.watch(quoteStreamProvider(_activeSymbol));
+    final liveBook = ref.watch(orderBookStreamProvider(_activeSymbol));
     final displayQuote = liveQuote.valueOrNull ?? _quote;
     if (_orderType == 'market' && displayQuote != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -342,22 +343,19 @@ class _TradeScreenState extends ConsumerState<TradeScreen>
           TradeQuoteHeader(
             symbol: _activeSymbol,
             quote: displayQuote,
+            orderBook: liveBook.valueOrNull,
             money: (v) => money.format(v),
             pct: (v) => pct.format(v),
           ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
-          child: OkxCapsuleSwitch(
-            leftLabel: S.tabChart,
-            rightLabel: S.tabOptionsChain,
-            showRight: _tabIndex == 1,
-            leftPillColor: AppColors.accent,
-            rightPillColor: AppColors.accentSoft,
-            onChanged: (chain) {
-              final idx = chain ? 1 : 0;
-              setState(() => _tabIndex = idx);
-              _tabCtrl.animateTo(idx);
-            },
+          child: Align(
+            alignment: _tabIndex == 0 ? Alignment.centerRight : Alignment.centerLeft,
+            child: _TradeActionKey(
+              label: _tabIndex == 0 ? S.tabOptionsChain : S.backToChart,
+              icon: _tabIndex == 0 ? Icons.view_list_rounded : Icons.arrow_back_rounded,
+              onTap: _tabIndex == 0 ? _goToOptionsTab : _goToChartTab,
+            ),
           ),
         ),
         Expanded(
@@ -472,17 +470,18 @@ class _TradeScreenState extends ConsumerState<TradeScreen>
             ),
           ],
           const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 2,
-                child: DepthBookPanel(symbol: _activeSymbol),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 3,
-                child: _OrderFormColumn(
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: DepthBookPanel(symbol: _activeSymbol),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 3,
+                  child: _OrderFormColumn(
                   selectedOcc: _selectedOcc,
                   side: _side,
                   orderType: _orderType,
@@ -507,9 +506,43 @@ class _TradeScreenState extends ConsumerState<TradeScreen>
                 ),
               ),
             ],
+            ),
           ),
           const SizedBox(height: 16),
           TradePositionsPanel(onTapPosition: _openPosition, embedded: true),
+        ],
+      ),
+    );
+  }
+}
+
+/// Glass-style tap key for trade sub-navigation (no swipe).
+class _TradeActionKey extends StatelessWidget {
+  const _TradeActionKey({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      borderRadius: OkxRadius.pill,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AppColors.text),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );

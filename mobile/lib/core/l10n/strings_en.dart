@@ -109,7 +109,7 @@ class StringsEn {
   String get bidAsk => 'Book';
   String get bid1 => 'Bid';
   String get ask1 => 'Ask';
-  String get lastPrice => 'Last';
+  String get lastPrice => 'Last trade';
   String get noBidAsk => 'No quotes';
   String get colPrice => 'Price';
   String get colDepthQty => 'Qty';
@@ -120,6 +120,7 @@ class StringsEn {
   String get put => 'Put';
   String get tabChart => 'Chart';
   String get tabOptionsChain => 'Chain';
+  String get backToChart => 'Back to chart';
   String get currentPosition => 'Position';
   String get apiSection => 'Alpaca API';
   String get apiLocalOnly => 'Keys stay on this device. The app connects to Alpaca directly.';
@@ -128,6 +129,9 @@ class StringsEn {
   String get alpacaEnvLive => 'Live';
   String get alpacaApiKey => 'API Key';
   String get alpacaApiSecret => 'API Secret';
+  String get depthApiUrl => 'Depth API URL';
+  String get depthApiHint =>
+      'Optional. JSON: {"asks":[{"price":1.23,"size":100}],"bids":[...]}. Use {symbol} in the URL. Leave empty for Alpaca BBO (level 1) only.';
   String get apiSaved => 'Alpaca credentials saved';
   String get apiTestConnection => 'Test connection';
   String get apiStatusTesting => 'Connecting to Alpaca…';
@@ -161,6 +165,17 @@ class StringsEn {
   String get save => 'Save';
   String get settingsSaved => 'Settings saved';
   String get appVersion => 'Version';
+  String get checkForUpdate => 'Check for updates';
+  String get updateAvailableBody => 'Update for the latest features and fixes.';
+  String get updateNow => 'Update now';
+  String get updateLater => 'Later';
+  String get updateDownloading => 'Downloading…';
+  String get updateInstalling => 'Installing — follow system prompts…';
+  String get updateUpToDate => 'You are up to date';
+  String get updateCheckFailed => 'Update check failed';
+  String get updateDisabled => 'Update URL not configured (AppUpdateConfig.manifestUrl)';
+  String updateAvailableTitle(String version) => 'Update $version available';
+  String updateBanner(String version) => 'Version $version available — tap to update';
 
   String winRateOpens(int total, int wins, int losses) =>
       '$total opens · $wins wins / $losses losses';

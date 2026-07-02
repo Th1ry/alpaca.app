@@ -1,0 +1,8 @@
+{
+  "version": "0.1.5",
+  "build": 6,
+  "android_url": "https://github.com/Th1ry/alpaca.app/releases/download/v0.1.5/alpaca-options-app-v0.1.5.apk",
+  "windows_url": "",
+  "notes": "五档盘口统一、首页折线缩略图、期权持仓布局、App 内检查更新",
+  "min_build": 0
+}

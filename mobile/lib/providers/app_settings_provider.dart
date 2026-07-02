@@ -8,6 +8,8 @@ import '../core/alpaca_config.dart';
 
 import '../core/app_settings.dart';
 
+import '../core/depth_api_config.dart';
+
 import '../core/strings.dart';
 
 import '../core/theme/app_theme.dart';
@@ -25,6 +27,8 @@ const _kLanguage = 'app_language';
 const _kPnlColor = 'pnl_color_mode';
 
 const _kTimezone = 'app_timezone';
+
+const _kDepthApiUrl = 'depth_api_url';
 
 
 
@@ -67,6 +71,8 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
       pnlColorMode: _parseEnum(PnlColorMode.values, p.getString(_kPnlColor), PnlColorMode.greenUp),
 
       timezone: AppTimezone.fromId(p.getString(_kTimezone)),
+
+      depthApiUrl: p.getString(_kDepthApiUrl) ?? DepthApiConfig.urlTemplate,
 
     );
 
@@ -125,6 +131,20 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
     await p.setString(_kAlpacaSecret, alpaca.apiSecret);
 
     state = state.copyWith(alpaca: alpaca.copyWith(apiUrl: url));
+
+  }
+
+
+
+  Future<void> saveDepthApiUrl(String url) async {
+
+    final p = await SharedPreferences.getInstance();
+
+    final trimmed = url.trim();
+
+    await p.setString(_kDepthApiUrl, trimmed);
+
+    state = state.copyWith(depthApiUrl: trimmed);
 
   }
 

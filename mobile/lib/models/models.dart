@@ -106,12 +106,18 @@ class NewsItem {
 class OrderBookLevel {
   final double price;
   final double size;
+  final bool isReal;
 
-  OrderBookLevel({required this.price, required this.size});
+  OrderBookLevel({
+    required this.price,
+    required this.size,
+    this.isReal = true,
+  });
 
   factory OrderBookLevel.fromJson(Map<String, dynamic> j) => OrderBookLevel(
         price: (j['price'] as num).toDouble(),
         size: (j['size'] as num).toDouble(),
+        isReal: j['is_real'] as bool? ?? true,
       );
 }
 

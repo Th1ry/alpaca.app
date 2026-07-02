@@ -62,24 +62,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
     try {
       final quotes = await api.getQuotes(watchlist);
-      final barResults = await Future.wait(
-        watchlist.map((sym) => api.getBars(sym, '1D').catchError((_) => <Bar>[])),
-      );
-      final sparks = <String, List<Bar>>{
-        for (var i = 0; i < watchlist.length; i++) watchlist[i]: barResults[i],
-      };
       ref.read(wsServiceProvider).subscribe(watchlist);
       if (mounted) {
         setState(() {
           _quotes
             ..clear()
             ..addAll(quotes);
-          _sparks
-            ..clear()
-            ..addAll(sparks);
           _loading = false;
         });
       }
+      _loadSparks(watchlist);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -88,6 +80,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         });
       }
     }
+  }
+
+  Future<void> _loadSparks(List<String> watchlist) async {
+    final api = ref.read(apiServiceProvider);
+    final results = await Future.wait(
+      watchlist.map((sym) => api.getSparklineBars(sym).catchError((_) => <Bar>[])),
+    );
+    if (!mounted) return;
+    setState(() {
+      for (var i = 0; i < watchlist.length; i++) {
+        _sparks[watchlist[i]] = results[i];
+      }
+    });
   }
 
   @override

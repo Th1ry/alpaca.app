@@ -127,6 +127,7 @@ class S {
   static String get put => _active.put;
   static String get tabChart => _active.tabChart;
   static String get tabOptionsChain => _active.tabOptionsChain;
+  static String get backToChart => _active.backToChart;
   static String get currentPosition => _active.currentPosition;
   static String get apiSection => _active.apiSection;
   static String get apiLocalOnly => _active.apiLocalOnly;
@@ -135,6 +136,8 @@ class S {
   static String get alpacaEnvLive => _active.alpacaEnvLive;
   static String get alpacaApiKey => _active.alpacaApiKey;
   static String get alpacaApiSecret => _active.alpacaApiSecret;
+  static String get depthApiUrl => _active.depthApiUrl;
+  static String get depthApiHint => _active.depthApiHint;
   static String get apiSaved => _active.apiSaved;
   static String get apiTestConnection => _active.apiTestConnection;
   static String get apiStatusTesting => _active.apiStatusTesting;
@@ -168,6 +171,17 @@ class S {
   static String get save => _active.save;
   static String get settingsSaved => _active.settingsSaved;
   static String get appVersion => _active.appVersion;
+  static String get checkForUpdate => _active.checkForUpdate;
+  static String get updateAvailableBody => _active.updateAvailableBody;
+  static String get updateNow => _active.updateNow;
+  static String get updateLater => _active.updateLater;
+  static String get updateDownloading => _active.updateDownloading;
+  static String get updateInstalling => _active.updateInstalling;
+  static String get updateUpToDate => _active.updateUpToDate;
+  static String get updateCheckFailed => _active.updateCheckFailed;
+  static String get updateDisabled => _active.updateDisabled;
+  static String updateAvailableTitle(String version) => _active.updateAvailableTitle(version);
+  static String updateBanner(String version) => _active.updateBanner(version);
 
   static String winRateOpens(int total, int wins, int losses) =>
       _active.winRateOpens(total, wins, losses);

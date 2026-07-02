@@ -21,7 +21,8 @@ pubspec.lock.bak
 build/
 mobile/build/
 mobile/.dart_tool/
-releases/
+releases/*
+!releases/app-update.json
 *.apk
 
 # IDE

@@ -15,9 +15,11 @@ import 'features/trade/trade_screen.dart';
 import 'models/models.dart';
 import 'providers/alpaca_connection_provider.dart';
 import 'providers/app_settings_provider.dart';
+import 'providers/app_update_provider.dart';
 import 'providers/portfolio_providers.dart';
 import 'services/api_service.dart';
 import 'services/ws_service.dart';
+import 'features/settings/app_update_dialog.dart';
 import 'shared/widgets/floating_capsule_nav.dart';
 
 class AlpacaOptionsApp extends ConsumerStatefulWidget {
@@ -38,9 +40,40 @@ class _AlpacaOptionsAppState extends ConsumerState<AlpacaOptionsApp> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       ref.read(wsServiceProvider).subscribePortfolio();
+      await ref.read(appUpdateProvider.notifier).autoCheckIfDue();
+      _promptUpdateIfNeeded();
     });
+  }
+
+  void _promptUpdateIfNeeded() {
+    final info = ref.read(appUpdateProvider).info;
+    if (info == null) return;
+    final ctx = _rootNavigatorKey.currentContext;
+    if (ctx == null) return;
+    showAppUpdateDialog(
+      ctx,
+      info: info,
+      onLater: () => ref.read(appUpdateProvider.notifier).dismiss(info),
+      onInstall: () => ref.read(appUpdateServiceProvider).installUpdate(info),
+    );
+  }
+
+  void _openUpdateFromBanner() {
+    final info = ref.read(appUpdateProvider).info;
+    if (info == null) {
+      _openSettings();
+      return;
+    }
+    final ctx = _rootNavigatorKey.currentContext;
+    if (ctx == null) return;
+    showAppUpdateDialog(
+      ctx,
+      info: info,
+      onLater: () => ref.read(appUpdateProvider.notifier).dismiss(info),
+      onInstall: () => ref.read(appUpdateServiceProvider).installUpdate(info),
+    );
   }
 
   void _goTrade(String symbol) {
@@ -94,6 +127,7 @@ class _AlpacaOptionsAppState extends ConsumerState<AlpacaOptionsApp> {
     });
 
     final settings = ref.watch(appSettingsProvider);
+    final updateState = ref.watch(appUpdateProvider);
     final safeBottom = MediaQuery.paddingOf(context).bottom;
     final locale = settings.language == AppLanguage.en
         ? const Locale('en', 'US')
@@ -171,22 +205,35 @@ class _AlpacaOptionsAppState extends ConsumerState<AlpacaOptionsApp> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            IndexedStack(
-              index: _tab,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                HomeScreen(key: ValueKey('home-${settings.language.name}'), onTrade: _goTrade),
-                TradeScreen(
-                  key: ValueKey('$_tradeSymbol:${_tradeSelectedOcc ?? ''}'),
-                  symbol: _tradeSymbol,
-                  selectedOcc: _tradeSelectedOcc,
-                  onSymbolChange: (s) => setState(() {
-                    _tradeSymbol = s;
-                    _tradeSelectedOcc = null;
-                  }),
-                ),
-                PortfolioScreen(
-                  key: ValueKey('portfolio-${settings.language.name}'),
-                  onTapPosition: _goTradePosition,
+                if (updateState.phase == AppUpdateCheckPhase.available &&
+                    updateState.info != null)
+                  AppUpdateBanner(
+                    version: updateState.info!.manifest.version,
+                    onTap: _openUpdateFromBanner,
+                  ),
+                Expanded(
+                  child: IndexedStack(
+                    index: _tab,
+                    children: [
+                      HomeScreen(key: ValueKey('home-${settings.language.name}'), onTrade: _goTrade),
+                      TradeScreen(
+                        key: ValueKey('$_tradeSymbol:${_tradeSelectedOcc ?? ''}'),
+                        symbol: _tradeSymbol,
+                        selectedOcc: _tradeSelectedOcc,
+                        onSymbolChange: (s) => setState(() {
+                          _tradeSymbol = s;
+                          _tradeSelectedOcc = null;
+                        }),
+                      ),
+                      PortfolioScreen(
+                        key: ValueKey('portfolio-${settings.language.name}'),
+                        onTapPosition: _goTradePosition,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

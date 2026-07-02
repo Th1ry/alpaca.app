@@ -1,9 +1,25 @@
 import 'dart:collection';
 
+import 'package:dio/dio.dart';
+
 import '../core/alpaca_config.dart';
 import '../models/models.dart';
 import 'alpaca_client.dart';
 import 'dismissed_positions_store.dart';
+
+class MarketSnapshot {
+  const MarketSnapshot({required this.quote, required this.orderBook});
+
+  final Quote quote;
+  final OrderBook orderBook;
+}
+
+class _MarketCacheEntry {
+  _MarketCacheEntry(this.at, this.snapshot);
+
+  final DateTime at;
+  final MarketSnapshot snapshot;
+}
 
 final _occRe = RegExp(r'^([A-Z]{1,6})(\d{6})([CP])(\d{8})$');
 
@@ -34,17 +50,35 @@ const _periodMap = <String, (String, String)>{
 };
 
 class AlpacaRepository {
-  AlpacaRepository(this.creds, {DismissedPositionsStore? dismissed})
-      : _client = AlpacaClient(creds),
+  AlpacaRepository(
+    this.creds, {
+    DismissedPositionsStore? dismissed,
+    this.depthApiUrl = '',
+  })  : _client = AlpacaClient(creds),
         _dismissed = dismissed ?? DismissedPositionsStore();
 
   final AlpacaCredentials creds;
+  final String depthApiUrl;
   final AlpacaClient _client;
   final DismissedPositionsStore _dismissed;
 
   final _expCache = <String, (DateTime, List<String>)>{};
   final _chainCache = <String, (DateTime, OptionsChain)>{};
   List<Map<String, dynamic>>? _assetsCache;
+  final _quoteBaseline = <String, Quote>{};
+  final _marketCache = <String, _MarketCacheEntry>{};
+  final _sparkCache = <String, (DateTime, List<Bar>)>{};
+
+  static const _marketCacheTtl = Duration(milliseconds: 350);
+  static const _sparkCacheTtl = Duration(minutes: 3);
+  static const _depthLevels = 5;
+
+  final Dio _external = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 8),
+      receiveTimeout: const Duration(seconds: 12),
+    ),
+  );
 
   bool get isConfigured => creds.isConfigured;
 
@@ -207,10 +241,53 @@ class AlpacaRepository {
 
   Future<Quote> getQuote(String symbol) async {
     final sym = symbol.toUpperCase();
-    if (_occRe.hasMatch(sym)) return _optionQuote(sym);
-    final snap = await _client.dataGet('/v2/stocks/$sym/snapshot?feed=${creds.dataFeed}')
-        as Map<String, dynamic>;
-    return _parseStockSnapshot(sym, snap);
+    final q = _occRe.hasMatch(sym)
+        ? await _optionQuote(sym)
+        : _parseStockSnapshot(
+            sym,
+            await _client.dataGet('/v2/stocks/$sym/snapshot?feed=${creds.dataFeed}')
+                as Map<String, dynamic>,
+          );
+    _quoteBaseline[sym] = q;
+    return q;
+  }
+
+  /// Single cached fetch — quote + order book share the same Alpaca BBO snapshot.
+  Future<MarketSnapshot> getMarketSnapshot(String symbol) async {
+    final sym = symbol.toUpperCase();
+    final hit = _marketCache[sym];
+    if (hit != null && DateTime.now().difference(hit.at) < _marketCacheTtl) {
+      return hit.snapshot;
+    }
+
+    final quote = _occRe.hasMatch(sym) ? await _optionQuoteLive(sym) : await _fetchStockQuoteLive(sym);
+    var book = _orderBookFromQuote(quote, sym);
+    book = await _mergeCustomDepth(book, sym);
+    final snapshot = MarketSnapshot(quote: quote, orderBook: book);
+    _marketCache[sym] = _MarketCacheEntry(DateTime.now(), snapshot);
+    _quoteBaseline[sym] = quote;
+    return snapshot;
+  }
+
+  /// Lightweight latest trade + quote — for fast UI refresh on the active symbol.
+  Future<Quote> getQuoteLive(String symbol) async {
+    return (await getMarketSnapshot(symbol)).quote;
+  }
+
+  Future<Quote> _fetchStockQuoteLive(String sym) async {
+    try {
+      final results = await Future.wait<Object?>([
+        _client.dataGet('/v2/stocks/trades/latest?symbols=$sym&feed=${creds.dataFeed}'),
+        _client.dataGet('/v2/stocks/quotes/latest?symbols=$sym&feed=${creds.dataFeed}'),
+      ]);
+      final tradeRoot = results[0] as Map<String, dynamic>? ?? {};
+      final quoteRoot = results[1] as Map<String, dynamic>? ?? {};
+      final trade = (tradeRoot['trades'] as Map<String, dynamic>?)?[sym] as Map<String, dynamic>? ?? {};
+      final lq = (quoteRoot['quotes'] as Map<String, dynamic>?)?[sym] as Map<String, dynamic>? ?? {};
+      return _mergeLiveStockQuote(sym, trade, lq);
+    } catch (_) {
+      return getQuote(sym);
+    }
   }
 
   Future<Map<String, Quote>> getQuotes(List<String> symbols) async {
@@ -234,7 +311,11 @@ class AlpacaRepository {
         final snaps = _stockSnapshotsFromResponse(data);
         for (final sym in stocks) {
           final snap = snaps[sym] as Map<String, dynamic>?;
-          if (snap != null) out[sym] = _parseStockSnapshot(sym, snap);
+          if (snap != null) {
+            final q = _parseStockSnapshot(sym, snap);
+            _quoteBaseline[sym] = q;
+            out[sym] = q;
+          }
         }
       } catch (_) {}
       for (final sym in stocks) {
@@ -253,10 +334,8 @@ class AlpacaRepository {
   }
 
   Future<OrderBook> getOrderBook(String symbol, {int levels = 5}) async {
-    final sym = symbol.toUpperCase();
-    final lv = levels.clamp(1, 10);
-    if (_occRe.hasMatch(sym)) return _optionOrderBook(sym, lv);
-    return _stockOrderBook(sym, lv);
+    final snap = await getMarketSnapshot(symbol);
+    return _trimBookLevels(snap.orderBook, levels.clamp(1, _depthLevels));
   }
 
   Future<List<Bar>> getBars(String symbol, String timeframe) async {
@@ -271,9 +350,46 @@ class AlpacaRepository {
       '/v2/stocks/bars?symbols=$sym&timeframe=${spec.alpaca}&start=$startStr'
       '&limit=${spec.limit}&feed=${creds.dataFeed}&adjustment=split',
     ) as Map<String, dynamic>;
-    final raw = (data['bars'] as Map<String, dynamic>?)?[sym] as List<dynamic>? ?? [];
+    final raw = _barsRawForSymbol(data, sym);
     final bars = _parseBars(raw);
     return _resampleBars(bars, spec.resample);
+  }
+
+  /// Daily closes for watchlist line spark (lightweight, cached).
+  Future<List<Bar>> getSparklineBars(String symbol) async {
+    final sym = symbol.toUpperCase();
+    final hit = _sparkCache[sym];
+    if (hit != null && DateTime.now().difference(hit.$1) < _sparkCacheTtl) {
+      return hit.$2;
+    }
+    const limit = 40;
+    final start = DateTime.now().toUtc().subtract(const Duration(days: 90));
+    final startStr = '${start.year.toString().padLeft(4, '0')}-'
+        '${start.month.toString().padLeft(2, '0')}-'
+        '${start.day.toString().padLeft(2, '0')}';
+    try {
+      final data = await _client.dataGet(
+        '/v2/stocks/bars?symbols=$sym&timeframe=1Day&start=$startStr'
+        '&limit=$limit&feed=${creds.dataFeed}&adjustment=split',
+      ) as Map<String, dynamic>;
+      var bars = _parseBars(_barsRawForSymbol(data, sym));
+      if (bars.length > limit) bars = bars.sublist(bars.length - limit);
+      _sparkCache[sym] = (DateTime.now(), bars);
+      return bars;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  List<dynamic> _barsRawForSymbol(Map<String, dynamic> data, String sym) {
+    final bucket = data['bars'];
+    if (bucket is Map<String, dynamic>) {
+      return bucket[sym] as List<dynamic>? ??
+          bucket[sym.toUpperCase()] as List<dynamic>? ??
+          const [];
+    }
+    if (bucket is List<dynamic>) return bucket;
+    return const [];
   }
 
   Future<List<SearchResult>> searchSymbols(String query) async {
@@ -557,7 +673,102 @@ class AlpacaRepository {
       '/v1beta1/options/snapshots?symbols=$occ&feed=${creds.optionFeed}',
     ) as Map<String, dynamic>;
     final snap = _optionSnapshotFromResponse(data, occ);
-    return _parseOptionSnapshot(occ, snap);
+    final q = _parseOptionSnapshot(occ, snap);
+    _quoteBaseline[occ] = q;
+    return q;
+  }
+
+  Future<Quote> _optionQuoteLive(String occ) async {
+    try {
+      final results = await Future.wait<Object?>([
+        _client.dataGet('/v1beta1/options/trades/latest?symbols=$occ&feed=${creds.optionFeed}'),
+        _client.dataGet('/v1beta1/options/quotes/latest?symbols=$occ&feed=${creds.optionFeed}'),
+      ]);
+      final tradeRoot = results[0] as Map<String, dynamic>? ?? {};
+      final quoteRoot = results[1] as Map<String, dynamic>? ?? {};
+      final trade = _optionLatestRow(tradeRoot, occ, 'trades');
+      final lq = _optionLatestRow(quoteRoot, occ, 'quotes');
+      final q = _mergeLiveOptionQuote(occ, trade, lq);
+      _quoteBaseline[occ] = q;
+      return q;
+    } catch (_) {
+      return _optionQuote(occ);
+    }
+  }
+
+  Map<String, dynamic> _optionLatestRow(
+    Map<String, dynamic> root,
+    String occ,
+    String key,
+  ) {
+    final bucket = root[key] as Map<String, dynamic>? ?? {};
+    return bucket[occ] as Map<String, dynamic>? ??
+        (bucket.isNotEmpty ? bucket.values.first as Map<String, dynamic>? ?? {} : {});
+  }
+
+  Quote _mergeLiveStockQuote(
+    String sym,
+    Map<String, dynamic> trade,
+    Map<String, dynamic> lq,
+  ) {
+    var bid = _dbl(lq['bp']);
+    var ask = _dbl(lq['ap']);
+    final bidSize = _dbl(lq['bs']);
+    final askSize = _dbl(lq['as']);
+    var price = _dbl(trade['p']);
+    if (price == 0 && ask > 0 && bid > 0) price = (bid + ask) / 2;
+    if (price == 0) price = ask;
+    if (price == 0) price = bid;
+    if (bid <= 0 && ask <= 0 && price > 0) {
+      final tick = _tickSize(price);
+      bid = price - tick;
+      ask = price + tick;
+    }
+    final base = _quoteBaseline[sym];
+    final prevClose = base?.prevClose ?? price;
+    final change = price - prevClose;
+    return Quote(
+      symbol: sym,
+      name: base?.name ?? sym,
+      price: _roundPrice(price),
+      change: _roundPrice(change),
+      changePct: prevClose != 0 ? double.parse((change / prevClose * 100).toStringAsFixed(2)) : 0,
+      prevClose: _roundPrice(prevClose),
+      bid: _roundPrice(bid),
+      ask: _roundPrice(ask),
+      bidSize: bidSize,
+      askSize: askSize,
+    );
+  }
+
+  Quote _mergeLiveOptionQuote(
+    String occ,
+    Map<String, dynamic> trade,
+    Map<String, dynamic> lq,
+  ) {
+    var bid = _dbl(lq['bp']);
+    var ask = _dbl(lq['ap']);
+    var price = _dbl(trade['p']);
+    if (price == 0 && ask > 0 && bid > 0) price = (bid + ask) / 2;
+    if (price == 0) price = ask;
+    if (price == 0) price = bid;
+    if (bid <= 0 && ask <= 0 && price > 0) {
+      final tick = _tickSize(price);
+      bid = price - tick;
+      ask = price + tick;
+    }
+    return Quote(
+      symbol: occ,
+      name: occ,
+      price: _roundPrice(price),
+      change: 0,
+      changePct: 0,
+      prevClose: _roundPrice(price),
+      bid: _roundPrice(bid),
+      ask: _roundPrice(ask),
+      bidSize: _dbl(lq['bs']),
+      askSize: _dbl(lq['as']),
+    );
   }
 
   Quote _parseStockSnapshot(String sym, Map<String, dynamic> snap) {
@@ -581,7 +792,7 @@ class AlpacaRepository {
       bid = price - tick;
       ask = price + tick;
     }
-    final prevCloseRaw = _dbl(prev['c'] != null ? prev['c'] : daily['o']);
+    final prevCloseRaw = _dbl(prev['c'] ?? daily['o']);
     final prevClose = prevCloseRaw == 0 ? price : prevCloseRaw;
     final change = price - prevClose;
     return Quote(
@@ -625,70 +836,76 @@ class AlpacaRepository {
     );
   }
 
-  Future<OrderBook> _stockOrderBook(String symbol, int levels) async {
-    final snap = await _client.dataGet('/v2/stocks/$symbol/snapshot?feed=${creds.dataFeed}')
-        as Map<String, dynamic>;
-    final quote = snap['latestQuote'] as Map<String, dynamic>? ?? {};
-    var bid = _dbl(quote['bp']);
-    var ask = _dbl(quote['ap']);
-    if (bid <= 0 || ask <= 0) {
-      final price = _dbl((snap['latestTrade'] as Map?)?['p']);
-      if (price > 0) {
-        final tick = _tickSize(price);
-        bid = price - tick;
-        ask = price + tick;
-      }
+  OrderBook _orderBookFromQuote(Quote q, String sym) {
+    final asks = <OrderBookLevel>[
+      OrderBookLevel(
+        price: q.ask,
+        size: q.askSize,
+        isReal: q.ask > 0,
+      ),
+    ];
+    final bids = <OrderBookLevel>[
+      OrderBookLevel(
+        price: q.bid,
+        size: q.bidSize,
+        isReal: q.bid > 0,
+      ),
+    ];
+    while (asks.length < _depthLevels) {
+      asks.add(OrderBookLevel(price: 0, size: 0, isReal: false));
     }
-    final built = _buildBookLevels(bid, ask, _dbl(quote['bs']), _dbl(quote['as']), levels);
-    return OrderBook(symbol: symbol, asks: built.$1, bids: built.$2);
+    while (bids.length < _depthLevels) {
+      bids.add(OrderBookLevel(price: 0, size: 0, isReal: false));
+    }
+    return OrderBook(symbol: sym, asks: asks, bids: bids);
   }
 
-  Future<OrderBook> _optionOrderBook(String occ, int levels) async {
-    final data = await _client.dataGet(
-      '/v1beta1/options/snapshots?symbols=$occ&feed=${creds.optionFeed}',
-    ) as Map<String, dynamic>;
-    final snap = (data['snapshots'] as Map<String, dynamic>?)?[occ] as Map<String, dynamic>? ?? {};
-    final quote = snap['latestQuote'] as Map<String, dynamic>? ?? {};
-    var bid = _dbl(quote['bp']);
-    var ask = _dbl(quote['ap']);
-    if (bid <= 0 || ask <= 0) {
-      final price = _dbl((snap['latestTrade'] as Map?)?['p']);
-      if (price > 0) {
-        final tick = _tickSize(price);
-        bid = price - tick;
-        ask = price + tick;
-      }
-    }
-    final built = _buildBookLevels(bid, ask, _dbl(quote['bs']), _dbl(quote['as']), levels);
-    return OrderBook(symbol: occ, asks: built.$1, bids: built.$2);
+  OrderBook _trimBookLevels(OrderBook book, int levels) {
+    return OrderBook(
+      symbol: book.symbol,
+      asks: book.asks.take(levels).toList(),
+      bids: book.bids.take(levels).toList(),
+    );
   }
 
-  (List<OrderBookLevel>, List<OrderBookLevel>) _buildBookLevels(
-    double bestBid,
-    double bestAsk,
-    double bidSize,
-    double askSize,
-    int levels,
-  ) {
-    if (bestBid <= 0 && bestAsk <= 0) return ([], []);
-    if (bestBid <= 0) bestBid = bestAsk - _tickSize(bestAsk);
-    if (bestAsk <= 0) bestAsk = bestBid + _tickSize(bestBid);
-    final tick = ((bestAsk - bestBid) / 2).clamp(_tickSize(bestBid), double.infinity);
-    final bidSz = bidSize > 0 ? bidSize : 100;
-    final askSz = askSize > 0 ? askSize : 100;
-    final asks = <OrderBookLevel>[];
-    final bids = <OrderBookLevel>[];
-    for (var i = 0; i < levels; i++) {
-      asks.add(OrderBookLevel(
-        price: double.parse((bestAsk + i * tick).toStringAsFixed(2)),
-        size: (askSz * (1 - i * 0.1)).clamp(1, double.infinity),
-      ));
-      bids.add(OrderBookLevel(
-        price: double.parse((bestBid - i * tick).toStringAsFixed(2)),
-        size: (bidSz * (1 - i * 0.1)).clamp(1, double.infinity),
-      ));
+  Future<OrderBook> _mergeCustomDepth(OrderBook base, String sym) async {
+    final tpl = depthApiUrl.trim();
+    if (tpl.isEmpty) return base;
+    try {
+      final url = tpl.replaceAll('{symbol}', sym);
+      final resp = await _external.get<Map<String, dynamic>>(url);
+      final data = resp.data;
+      if (data == null) return base;
+
+      final apiAsks = _levelsFromJsonList(data['asks']);
+      final apiBids = _levelsFromJsonList(data['bids']);
+      if (apiAsks.isEmpty && apiBids.isEmpty) return base;
+
+      final asks = List<OrderBookLevel>.from(base.asks);
+      final bids = List<OrderBookLevel>.from(base.bids);
+      for (var i = 0; i < _depthLevels; i++) {
+        if (i < apiAsks.length) asks[i] = apiAsks[i];
+        if (i < apiBids.length) bids[i] = apiBids[i];
+      }
+      return OrderBook(symbol: sym, asks: asks, bids: bids);
+    } catch (_) {
+      return base;
     }
-    return (asks, bids);
+  }
+
+  List<OrderBookLevel> _levelsFromJsonList(Object? raw) {
+    if (raw is! List) return const [];
+    final out = <OrderBookLevel>[];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final m = Map<String, dynamic>.from(item);
+      final price = _dbl(m['price'] ?? m['p']);
+      final size = _dbl(m['size'] ?? m['s']);
+      if (price <= 0) continue;
+      out.add(OrderBookLevel(price: _roundPrice(price), size: size, isReal: true));
+      if (out.length >= _depthLevels) break;
+    }
+    return out;
   }
 
   List<Bar> _parseBars(List<dynamic> raw) {
@@ -703,7 +920,7 @@ class AlpacaRepository {
       final hi = m['h'] != null ? _dbl(m['h']) : [open, close].reduce((a, b) => a > b ? a : b);
       final lo = m['l'] != null ? _dbl(m['l']) : [open, close].reduce((a, b) => a < b ? a : b);
       bars.add(Bar(
-        time: DateTime.parse((m['t'] as String).replaceFirst('Z', '+00:00')).millisecondsSinceEpoch ~/ 1000,
+        time: _barTimeSec(m),
         open: open,
         high: hi,
         low: lo,
@@ -711,6 +928,18 @@ class AlpacaRepository {
       ));
     }
     return bars;
+  }
+
+  int _barTimeSec(Map<String, dynamic> m) {
+    final t = m['t'];
+    if (t is num) {
+      final v = t.toInt();
+      return v > 10000000000 ? v ~/ 1000 : v;
+    }
+    if (t is String && t.isNotEmpty) {
+      return DateTime.parse(t.replaceFirst('Z', '+00:00')).millisecondsSinceEpoch ~/ 1000;
+    }
+    return 0;
   }
 
   List<Bar> _resampleBars(List<Bar> bars, int factor) {

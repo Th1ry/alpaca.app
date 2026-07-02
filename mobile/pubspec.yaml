@@ -1,7 +1,7 @@
 name: alpaca_options_app
 description: US options trading MVP - Alpaca API
 publish_to: none
-version: 0.1.0+1
+version: 0.1.5+6
 
 environment:
   sdk: ">=3.2.0 <4.0.0"
@@ -17,6 +17,8 @@ dependencies:
   shared_preferences: ^2.3.3
   intl: ^0.20.2
   package_info_plus: ^8.3.0
+  ota_update: ^7.1.0
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:
