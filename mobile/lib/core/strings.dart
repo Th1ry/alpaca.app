@@ -167,6 +167,7 @@ class S {
   static String get tzUtc => _active.tzUtc;
   static String get save => _active.save;
   static String get settingsSaved => _active.settingsSaved;
+  static String get appVersion => _active.appVersion;
 
   static String winRateOpens(int total, int wins, int losses) =>
       _active.winRateOpens(total, wins, losses);

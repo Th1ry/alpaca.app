@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/alpaca_config.dart';
 import '../../core/app_settings.dart';
@@ -14,6 +14,7 @@ import '../../core/theme/app_theme.dart';
 import '../../providers/alpaca_connection_provider.dart';
 import '../../providers/app_settings_provider.dart';
 
+import '../../shared/widgets/floating_capsule_nav.dart';
 import '../../shared/widgets/okx_ui.dart';
 
 
@@ -41,6 +42,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   AlpacaEnv _env = AlpacaEnv.paper;
 
   var _fieldsReady = false;
+  PackageInfo? _packageInfo;
 
 
 
@@ -51,7 +53,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadApiFields());
-
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) setState(() => _packageInfo = info);
+    });
   }
 
 
@@ -360,7 +364,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
       body: ListView(
 
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          12,
+          16,
+          32 + FloatingCapsuleNav.overlayInset(context),
+        ),
 
         children: [
 
@@ -659,6 +668,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
 
               ],
+
+            ),
+
+          ),
+
+          const SizedBox(height: 28),
+
+          Center(
+
+            child: Text(
+
+              _packageInfo == null
+
+                  ? ''
+
+                  : '${S.appVersion} ${_packageInfo!.version} (${_packageInfo!.buildNumber})',
+
+              style: TextStyle(fontSize: 11, color: AppColors.muted2, height: 1.4),
 
             ),
 

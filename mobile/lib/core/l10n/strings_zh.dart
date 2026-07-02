@@ -158,6 +158,7 @@ class StringsZh {
   String get tzUtc => 'UTC';
   String get save => '保存';
   String get settingsSaved => '设置已保存';
+  String get appVersion => '版本';
 
   String winRateOpens(int total, int wins, int losses) =>
       '共 $total 笔开仓，$wins 胜 / $losses 负';

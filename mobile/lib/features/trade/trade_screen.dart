@@ -10,10 +10,12 @@ import '../../providers/alpaca_connection_provider.dart';
 import '../../providers/portfolio_providers.dart';
 import '../../services/api_service.dart';
 import '../../services/ws_service.dart';
+import '../../shared/widgets/floating_capsule_nav.dart';
 import '../../shared/widgets/symbol_search_field.dart';
 import '../../shared/widgets/widgets.dart';
 import '../../shared/widgets/okx_ui.dart';
 import 'bid_ask_panel.dart';
+import 'depth_book_panel.dart';
 import 'order_capacity_panel.dart';
 import 'order_qty_utils.dart';
 import 'qty_ratio_slider.dart';
@@ -53,6 +55,9 @@ class _TradeScreenState extends ConsumerState<TradeScreen>
   String? _selectedOcc;
   String _ratioSymbolKey = '';
   int _tabIndex = 0;
+  bool _chartExpanded = true;
+
+  static const _chartExpandedHeight = 220.0;
 
   String get _activeSymbol => (_selectedOcc ?? _symbol).toUpperCase();
 
@@ -255,21 +260,6 @@ class _TradeScreenState extends ConsumerState<TradeScreen>
     _tabCtrl.animateTo(0);
   }
 
-  Future<void> _switchToStockChart() async {
-    if (_selectedOcc == null) return;
-    setState(() {
-      _selectedOcc = null;
-      _bars = [];
-    });
-    _syncRatioSymbolReset();
-    _subscribeActiveQuote();
-    await _loadChartBars(_symbol, _timeframe);
-    try {
-      final quote = await ref.read(apiServiceProvider).getQuote(_symbol);
-      if (mounted) setState(() => _quote = quote);
-    } catch (_) {}
-  }
-
   String _formatOrderPrice(double price) =>
       price >= 1 ? price.toStringAsFixed(2) : price.toStringAsFixed(4);
 
@@ -371,42 +361,17 @@ class _TradeScreenState extends ConsumerState<TradeScreen>
           ),
         ),
         Expanded(
-          flex: 3,
           child: _loading
               ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
               : _error != null
                   ? ApiErrorView(onRetry: _load, detail: S.loadFailedHint)
-                  : TabBarView(
-                      controller: _tabCtrl,
-                      children: [
-                        _ChartOrderPage(
-                          bars: _bars,
-                          timeframe: _timeframe,
-                          quote: displayQuote,
-                          activeSymbol: _activeSymbol,
-                          underlying: _symbol,
-                          selectedOcc: _selectedOcc,
-                          onSwitchToStock: _switchToStockChart,
-                          onTimeframe: (tf) {
-                            setState(() => _timeframe = tf);
-                            _loadChartBars(_activeSymbol, tf);
-                          },
-                          side: _side,
-                          orderType: _orderType,
-                          qtyCtrl: _qtyCtrl,
-                          limitCtrl: _limitCtrl,
-                          onSide: (s) => setState(() => _side = s),
-                          onType: (t) {
-                            setState(() {
-                              _orderType = t;
-                              if (t == 'market') {
-                                _syncMarketOrderPrice(displayQuote);
-                              }
-                            });
-                          },
-                          onSubmit: _submit,
-                        ),
-                        _OptionsPage(
+                  : _tabIndex == 0
+                      ? _buildChartTab(
+                          displayQuote: displayQuote,
+                          account: ref.watch(accountProvider).valueOrNull,
+                          positions: ref.watch(positionsProvider).valueOrNull ?? [],
+                        )
+                      : _OptionsPage(
                           chain: _chain,
                           onSelect: _selectOption,
                           onExpiry: (exp) async {
@@ -416,206 +381,262 @@ class _TradeScreenState extends ConsumerState<TradeScreen>
                             if (mounted) setState(() => _chain = c);
                           },
                         ),
-                      ],
-                    ),
         ),
-        Expanded(flex: 2, child: TradePositionsPanel(onTapPosition: _openPosition)),
       ],
+    );
+  }
+
+  Widget _buildChartTab({
+    required Quote? displayQuote,
+    required AccountSummary? account,
+    required List<Position> positions,
+  }) {
+    final isMarket = _orderType == 'market';
+    final orderPrice = isMarket
+        ? (displayQuote?.price ?? 0)
+        : (double.tryParse(_limitCtrl.text) ?? displayQuote?.price ?? 0);
+    final isOption = isOptionSymbol(_activeSymbol);
+    final isBuy = _side.toLowerCase() == 'buy';
+    final maxQty = (isBuy
+            ? computeMaxBuyQty(
+                account: account, orderPrice: orderPrice, activeSymbol: _activeSymbol)
+            : computeMaxSellQty(
+                positions: positions, underlying: _symbol, selectedOcc: _selectedOcc)) ??
+        0;
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        12,
+        8,
+        12,
+        12 + FloatingCapsuleNav.overlayInset(context),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Material(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(OkxRadius.md),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(OkxRadius.md),
+              onTap: () => setState(() => _chartExpanded = !_chartExpanded),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    Text(
+                      S.tabChart,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    if (_selectedOcc != null) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _selectedOcc!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 10, color: AppColors.accentSoft),
+                        ),
+                      ),
+                    ] else
+                      const Spacer(),
+                    Icon(
+                      _chartExpanded ? Icons.expand_less : Icons.expand_more,
+                      size: 22,
+                      color: AppColors.muted,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (_chartExpanded) ...[
+            const SizedBox(height: 8),
+            OkxSegmentRow(
+              options: [for (final tf in _ChartTabBody.timeframes) (tf, tf)],
+              selected: _timeframe,
+              onSelect: (tf) {
+                setState(() => _timeframe = tf);
+                _loadChartBars(_activeSymbol, tf);
+              },
+              fontSize: 10,
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: _chartExpandedHeight,
+              child: CandleChart(
+                key: ValueKey('$_activeSymbol-$_timeframe'),
+                bars: _bars,
+                timeframe: _timeframe,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 2,
+                child: DepthBookPanel(symbol: _activeSymbol),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 3,
+                child: _OrderFormColumn(
+                  selectedOcc: _selectedOcc,
+                  side: _side,
+                  orderType: _orderType,
+                  qtyCtrl: _qtyCtrl,
+                  limitCtrl: _limitCtrl,
+                  activeSymbol: _activeSymbol,
+                  underlying: _symbol,
+                  isOption: isOption,
+                  isBuy: isBuy,
+                  maxQty: maxQty,
+                  orderPrice: orderPrice,
+                  account: account,
+                  positions: positions,
+                  onSide: (s) => setState(() => _side = s),
+                  onType: (t) {
+                    setState(() {
+                      _orderType = t;
+                      if (t == 'market') _syncMarketOrderPrice(displayQuote);
+                    });
+                  },
+                  onSubmit: _submit,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TradePositionsPanel(onTapPosition: _openPosition, embedded: true),
+        ],
+      ),
     );
   }
 }
 
-class _ChartOrderPage extends ConsumerWidget {
-  static const _timeframes = ['1m', '5m', '15m', '1h', '4h', '1d'];
-
-  const _ChartOrderPage({
-    required this.bars,
-    required this.timeframe,
-    required this.quote,
-    required this.activeSymbol,
-    required this.underlying,
+class _OrderFormColumn extends StatelessWidget {
+  const _OrderFormColumn({
     required this.selectedOcc,
-    required this.onSwitchToStock,
-    required this.onTimeframe,
     required this.side,
     required this.orderType,
     required this.qtyCtrl,
     required this.limitCtrl,
+    required this.activeSymbol,
+    required this.underlying,
+    required this.isOption,
+    required this.isBuy,
+    required this.maxQty,
+    required this.orderPrice,
+    required this.account,
+    required this.positions,
     required this.onSide,
     required this.onType,
     required this.onSubmit,
   });
 
-  final List<Bar> bars;
-  final String timeframe;
-  final Quote? quote;
-  final String activeSymbol;
-  final String underlying;
   final String? selectedOcc;
-  final VoidCallback onSwitchToStock;
-  final ValueChanged<String> onTimeframe;
   final String side;
   final String orderType;
   final TextEditingController qtyCtrl;
   final TextEditingController limitCtrl;
+  final String activeSymbol;
+  final String underlying;
+  final bool isOption;
+  final bool isBuy;
+  final double maxQty;
+  final double orderPrice;
+  final AccountSummary? account;
+  final List<Position> positions;
   final ValueChanged<String> onSide;
   final ValueChanged<String> onType;
   final VoidCallback onSubmit;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final account = ref.watch(accountProvider).valueOrNull;
-    final positions = ref.watch(positionsProvider).valueOrNull ?? [];
+  Widget build(BuildContext context) {
     final isMarket = orderType == 'market';
-    final orderPrice = isMarket
-        ? (quote?.price ?? 0)
-        : (double.tryParse(limitCtrl.text) ?? quote?.price ?? 0);
-    final isOption = isOptionSymbol(activeSymbol);
-    final isBuy = side.toLowerCase() == 'buy';
-    final maxQty = (isBuy
-            ? computeMaxBuyQty(account: account, orderPrice: orderPrice, activeSymbol: activeSymbol)
-            : computeMaxSellQty(
-                positions: positions, underlying: underlying, selectedOcc: selectedOcc)) ??
-        0;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: OkxCapsuleSwitch(
-                    leftLabel: S.chartStock,
-                    rightLabel: S.chartOption,
-                    showRight: selectedOcc != null,
-                    rightEnabled: selectedOcc != null,
-                    leftPillColor: AppColors.green.withValues(alpha: 0.88),
-                    rightPillColor: AppColors.accentSoft,
-                    onChanged: (option) {
-                      if (!option) onSwitchToStock();
-                    },
-                    height: 36,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: OkxSegmentRow(
-                    options: [for (final tf in _timeframes) (tf, tf)],
-                    selected: timeframe,
-                    onSelect: onTimeframe,
-                    fontSize: 10,
-                  ),
-                ),
-                Expanded(
-                  child: CandleChart(
-                    key: ValueKey('$activeSymbol-$timeframe'),
-                    bars: bars,
-                    timeframe: timeframe,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(S.orderSection, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                          if (selectedOcc != null) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              '合约: $selectedOcc',
-                              style: TextStyle(color: AppColors.accentSoft, fontSize: 11),
-                            ),
-                          ],
-                          const SizedBox(height: 10),
-                          OkxBuySellBar(
-                            side: side,
-                            onChanged: onSide,
-                            buyLabel: S.buy,
-                            sellLabel: S.sell,
-                          ),
-                          const SizedBox(height: 10),
-                          OkxOrderTypeSwitch(
-                            value: orderType,
-                            onChanged: onType,
-                            marketLabel: S.market,
-                            limitLabel: S.limit,
-                          ),
-                          const SizedBox(height: 10),
-                          TextField(
-                            controller: qtyCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(labelText: S.qty),
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(height: 4),
-                          QtyRatioSlider(
-                            symbol: activeSymbol,
-                            maxQty: maxQty,
-                            isOption: isOption,
-                            qtyCtrl: qtyCtrl,
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: limitCtrl,
-                            readOnly: isMarket,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: InputDecoration(
-                              labelText: S.orderPrice,
-                              filled: isMarket,
-                              fillColor: isMarket ? AppColors.card : null,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          OrderCapacityPanel(
-                            side: side,
-                            account: account,
-                            orderPrice: orderPrice,
-                            activeSymbol: activeSymbol,
-                            underlying: underlying,
-                            selectedOcc: selectedOcc,
-                            positions: positions,
-                          ),
-                          const SizedBox(height: 12),
-                          FilledButton(
-                            onPressed: onSubmit,
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size.fromHeight(42),
-                              backgroundColor: isBuy ? AppColors.green : AppColors.red,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(OkxRadius.pill),
-                              ),
-                            ),
-                            child: Text(isBuy ? S.buy : S.sell),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(S.orderSection, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        if (selectedOcc != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            '合约: $selectedOcc',
+            style: TextStyle(color: AppColors.accentSoft, fontSize: 11),
           ),
         ],
-      ),
+        const SizedBox(height: 10),
+        OkxBuySellBar(
+          side: side,
+          onChanged: onSide,
+          buyLabel: S.buy,
+          sellLabel: S.sell,
+        ),
+        const SizedBox(height: 10),
+        OkxOrderTypeSwitch(
+          value: orderType,
+          onChanged: onType,
+          marketLabel: S.market,
+          limitLabel: S.limit,
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: qtyCtrl,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(labelText: S.qty),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 4),
+        QtyRatioSlider(
+          symbol: activeSymbol,
+          maxQty: maxQty,
+          isOption: isOption,
+          qtyCtrl: qtyCtrl,
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: limitCtrl,
+          readOnly: isMarket,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+            labelText: S.orderPrice,
+            filled: isMarket,
+            fillColor: isMarket ? AppColors.card : null,
+          ),
+        ),
+        const SizedBox(height: 10),
+        OrderCapacityPanel(
+          side: side,
+          account: account,
+          orderPrice: orderPrice,
+          activeSymbol: activeSymbol,
+          underlying: underlying,
+          selectedOcc: selectedOcc,
+          positions: positions,
+        ),
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: onSubmit,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(42),
+            backgroundColor: isBuy ? AppColors.green : AppColors.red,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(OkxRadius.pill),
+            ),
+          ),
+          child: Text(isBuy ? S.buy : S.sell),
+        ),
+      ],
     );
   }
+}
+
+/// Timeframe list shared by chart tab.
+class _ChartTabBody {
+  static const timeframes = ['1m', '5m', '15m', '1h', '4h', '1d'];
 }
 
 class _OptionsPage extends StatefulWidget {

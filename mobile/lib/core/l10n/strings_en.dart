@@ -160,6 +160,7 @@ class StringsEn {
   String get tzUtc => 'UTC';
   String get save => 'Save';
   String get settingsSaved => 'Settings saved';
+  String get appVersion => 'Version';
 
   String winRateOpens(int total, int wins, int losses) =>
       '$total opens · $wins wins / $losses losses';
