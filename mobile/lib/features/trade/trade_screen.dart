@@ -314,9 +314,9 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
 
     final money = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
     final pct = NumberFormat('+#0.00;-#0.00');
-    final liveQuote = ref.watch(quoteStreamProvider(_activeSymbol));
-    final liveBook = ref.watch(orderBookStreamProvider(_activeSymbol));
-    final displayQuote = liveQuote.valueOrNull ?? _quote;
+    final liveSnap = ref.watch(marketSnapshotStreamProvider(_activeSymbol));
+    final displayQuote = liveSnap.valueOrNull?.quote ?? _quote;
+    final displayBook = liveSnap.valueOrNull?.orderBook;
     if (_orderType == 'market' && displayQuote != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _syncMarketOrderPrice(displayQuote);
@@ -343,7 +343,7 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
           TradeQuoteHeader(
             symbol: _activeSymbol,
             quote: displayQuote,
-            orderBook: liveBook.valueOrNull,
+            orderBook: displayBook,
             money: (v) => money.format(v),
             pct: (v) => pct.format(v),
           ),

@@ -30,6 +30,8 @@ class ApiService {
 
   bool get isConfigured => _repo.isConfigured;
 
+  bool get hasCustomDepth => _repo.hasCustomDepth;
+
   Future<AccountSummary> getAccount() => _repo.getAccount();
 
   Future<List<Position>> getPositions() => _repo.getPositions();
@@ -45,7 +47,12 @@ class ApiService {
 
   Future<Quote> getQuoteLive(String symbol) => _repo.getQuoteLive(symbol);
 
-  Future<MarketSnapshot> getMarketSnapshot(String symbol) => _repo.getMarketSnapshot(symbol);
+  Future<MarketSnapshot> getMarketSnapshot(
+    String symbol, {
+    bool refresh = false,
+    bool l1Only = false,
+  }) =>
+      _repo.getMarketSnapshot(symbol, refresh: refresh, l1Only: l1Only);
 
   Future<OrderBook> getOrderBook(String symbol, {int levels = 5}) =>
       _repo.getOrderBook(symbol, levels: levels);

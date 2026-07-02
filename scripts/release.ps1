@@ -1,7 +1,7 @@
 # One-command release: bump version -> commit -> tag -> push -> GitHub Actions builds APK + Release.
 # Usage:
 #   .\scripts\release.ps1 -Version 0.1.6 -Notes "修复某某问题"
-#   .\scripts\release.ps1 -Version 0.1.5 -Notes "补发 v0.1.5" -SkipVersionBump  # re-tag existing version
+#   .\scripts\release.ps1 -Version 0.1.5 -Notes "补发 v0.1.5" -SkipVersionBump
 
 param(
     [Parameter(Mandatory = $true)]
@@ -18,6 +18,14 @@ $Pubspec = Join-Path $Root "mobile\pubspec.yaml"
 $Tag = "v$Version"
 
 Set-Location $Root
+
+function Invoke-Git {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
+    & git @Args
+    if ($LASTEXITCODE -ne 0) {
+        throw "git $($Args -join ' ') failed (exit $LASTEXITCODE)"
+    }
+}
 
 if (-not (Test-Path $Pubspec)) {
     throw "pubspec not found: $Pubspec"
@@ -38,43 +46,45 @@ function Set-PubspecVersion {
     Set-Content -Path $Pubspec -Value $updated -NoNewline
 }
 
+$env:GIT_AUTHOR_NAME = "Th1ry"
+$env:GIT_AUTHOR_EMAIL = "Th1ry@users.noreply.github.com"
+$env:GIT_COMMITTER_NAME = "Th1ry"
+$env:GIT_COMMITTER_EMAIL = "Th1ry@users.noreply.github.com"
+
 $current = Get-PubspecVersion
 $build = if ($SkipVersionBump -and $current.Name -eq $Version) { $current.Build } else { $current.Build + 1 }
 
 if (-not $SkipVersionBump) {
     Set-PubspecVersion -Name $Version -Build $build
     Write-Host "pubspec -> ${Version}+${build}" -ForegroundColor Cyan
+    Invoke-Git add $Pubspec
+    $commitMsg = if ($Notes) { "Release ${Tag}: ${Notes}" } else { "Release ${Tag}" }
+    Invoke-Git commit -m $commitMsg
+    Write-Host "Pushing main..." -ForegroundColor Cyan
+    Invoke-Git push origin main
+} else {
+    Write-Host "SkipVersionBump: main push skipped (no code change)." -ForegroundColor Yellow
 }
 
-$commitMsg = if ($Notes) { "Release ${Tag}: ${Notes}" } else { "Release ${Tag}" }
-git diff --cached --quiet
-$hasStaged = $LASTEXITCODE -ne 0
-if ($hasStaged) {
-    $env:GIT_AUTHOR_NAME = "Th1ry"
-    $env:GIT_AUTHOR_EMAIL = "Th1ry@users.noreply.github.com"
-    $env:GIT_COMMITTER_NAME = "Th1ry"
-    $env:GIT_COMMITTER_EMAIL = "Th1ry@users.noreply.github.com"
-    git commit -m $commitMsg
+$remoteTag = git ls-remote --tags origin "refs/tags/$Tag" 2>$null
+if ($remoteTag) {
+    throw "Remote tag $Tag already exists on GitHub. Use a new version or delete the tag first."
 }
-
-Write-Host "Pushing main..." -ForegroundColor Cyan
-git push origin main
 
 if (git rev-parse $Tag 2>$null) {
-    Write-Host "Tag $Tag exists locally, deleting..." -ForegroundColor Yellow
-    git tag -d $Tag | Out-Null
-}
-if (git ls-remote --tags origin $Tag 2>$null | Select-String $Tag) {
-    Write-Host "Remote tag $Tag exists. Delete on GitHub first or use a new version." -ForegroundColor Red
-    exit 1
+    Write-Host "Removing local tag $Tag..." -ForegroundColor Yellow
+    Invoke-Git tag -d $Tag
 }
 
-git tag -a $Tag -m $(if ($Notes) { $Notes } else { "Release $Version" })
-Write-Host "Pushing tag $Tag -> GitHub Actions will build APK + create Release..." -ForegroundColor Cyan
-git push origin $Tag
+$tagMsg = if ($Notes) { $Notes } else { "Release $Version" }
+Write-Host "Creating tag $Tag..." -ForegroundColor Cyan
+Invoke-Git tag -a $Tag -m $tagMsg
+
+Write-Host "Pushing tag $Tag (this triggers GitHub Actions)..." -ForegroundColor Cyan
+Invoke-Git push origin $Tag
 
 Write-Host ""
-Write-Host "Done. Open Actions to watch:" -ForegroundColor Green
+Write-Host "Done. Watch build progress:" -ForegroundColor Green
 Write-Host "https://github.com/Th1ry/alpaca.app/actions"
 Write-Host ""
-Write-Host "When finished, OTA manifest updates automatically on main."
+Write-Host "Release + OTA manifest update in ~5-10 min."

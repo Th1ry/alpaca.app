@@ -12,7 +12,8 @@ final _priceFmt = NumberFormat('#,##0.00');
 final _qtyFmt = NumberFormat('#,##0');
 const _levels = 5;
 
-/// Five-level bid / ask depth (五档) — level 1 from Alpaca API; 2–5 optional custom API.
+/// Five-level bid / ask depth (五档).
+/// Custom depth API configured → user data; otherwise Alpaca L1 only (2–5 dimmed).
 class DepthBookPanel extends ConsumerWidget {
   const DepthBookPanel({super.key, required this.symbol});
 
@@ -20,8 +21,8 @@ class DepthBookPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final bookAsync = ref.watch(orderBookStreamProvider(symbol));
-    final book = bookAsync.valueOrNull;
+    final snap = ref.watch(marketSnapshotStreamProvider(symbol)).valueOrNull;
+    final book = snap?.orderBook;
 
     final asks = _padLevels(book?.asks ?? const <OrderBookLevel>[]);
     final bids = _padLevels(book?.bids ?? const <OrderBookLevel>[]);

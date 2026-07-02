@@ -76,22 +76,14 @@ class TradeQuoteHeader extends StatelessWidget {
   }
 }
 
-/// Compact bid / ask beside the symbol header — uses order book L1 when available.
+/// Compact bid / ask beside the symbol header — always from order book L1.
 class BidAskStrip extends StatelessWidget {
   const BidAskStrip({super.key, this.quote, this.orderBook});
 
   final Quote? quote;
   final OrderBook? orderBook;
 
-  OrderBookLevel? get _bid1 {
-    final levels = orderBook?.bids ?? const <OrderBookLevel>[];
-    if (levels.isEmpty) return null;
-    final l = levels.first;
-    return l.isReal && l.price > 0 ? l : null;
-  }
-
-  OrderBookLevel? get _ask1 {
-    final levels = orderBook?.asks ?? const <OrderBookLevel>[];
+  OrderBookLevel? _level1(List<OrderBookLevel> levels) {
     if (levels.isEmpty) return null;
     final l = levels.first;
     return l.isReal && l.price > 0 ? l : null;
@@ -99,10 +91,11 @@ class BidAskStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bid = _bid1;
-    final ask = _ask1;
+    final bid = _level1(orderBook?.bids ?? const <OrderBookLevel>[]);
+    final ask = _level1(orderBook?.asks ?? const <OrderBookLevel>[]);
     final q = quote;
 
+    // Fallback to quote BBO only before the first book snapshot arrives.
     final bidPrice = bid?.price ?? (q != null && q.bid > 0 ? q.bid : null);
     final bidSize = bid?.size ?? (q != null && q.bid > 0 ? q.bidSize : null);
     final askPrice = ask?.price ?? (q != null && q.ask > 0 ? q.ask : null);

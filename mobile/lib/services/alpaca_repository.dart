@@ -69,14 +69,14 @@ class AlpacaRepository {
   final _marketCache = <String, _MarketCacheEntry>{};
   final _sparkCache = <String, (DateTime, List<Bar>)>{};
 
-  static const _marketCacheTtl = Duration(milliseconds: 350);
+  static const _marketCacheTtl = Duration(milliseconds: 200);
   static const _sparkCacheTtl = Duration(minutes: 3);
   static const _depthLevels = 5;
 
-  final Dio _external = Dio(
+  final Dio _depthClient = Dio(
     BaseOptions(
-      connectTimeout: const Duration(seconds: 8),
-      receiveTimeout: const Duration(seconds: 12),
+      connectTimeout: const Duration(seconds: 2),
+      receiveTimeout: const Duration(seconds: 2),
     ),
   );
 
@@ -252,20 +252,37 @@ class AlpacaRepository {
     return q;
   }
 
-  /// Single cached fetch — quote + order book share the same Alpaca BBO snapshot.
-  Future<MarketSnapshot> getMarketSnapshot(String symbol) async {
+  bool get hasCustomDepth => depthApiUrl.trim().isNotEmpty;
+
+  /// Quote + order book. Without custom depth API: L1 only (Alpaca BBO).
+  /// With custom depth API: full book from user API, falling back to L1 on failure.
+  /// Set [l1Only] to skip custom depth (fast refresh for header / 买一卖一).
+  Future<MarketSnapshot> getMarketSnapshot(
+    String symbol, {
+    bool refresh = false,
+    bool l1Only = false,
+  }) async {
     final sym = symbol.toUpperCase();
-    final hit = _marketCache[sym];
-    if (hit != null && DateTime.now().difference(hit.at) < _marketCacheTtl) {
-      return hit.snapshot;
+    if (!refresh && !l1Only) {
+      final hit = _marketCache[sym];
+      if (hit != null && DateTime.now().difference(hit.at) < _marketCacheTtl) {
+        return hit.snapshot;
+      }
     }
 
     final quote = _occRe.hasMatch(sym) ? await _optionQuoteLive(sym) : await _fetchStockQuoteLive(sym);
-    var book = _orderBookFromQuote(quote, sym);
-    book = await _mergeCustomDepth(book, sym);
-    final snapshot = MarketSnapshot(quote: quote, orderBook: book);
-    _marketCache[sym] = _MarketCacheEntry(DateTime.now(), snapshot);
-    _quoteBaseline[sym] = quote;
+    final OrderBook book;
+    if (depthApiUrl.trim().isEmpty || l1Only) {
+      book = _orderBookFromQuote(quote, sym);
+    } else {
+      book = await _fetchCustomDepthBook(sym) ?? _orderBookFromQuote(quote, sym);
+    }
+    final syncedQuote = _quoteWithBookL1(quote, book);
+    final snapshot = MarketSnapshot(quote: syncedQuote, orderBook: book);
+    if (!l1Only) {
+      _marketCache[sym] = _MarketCacheEntry(DateTime.now(), snapshot);
+    }
+    _quoteBaseline[sym] = syncedQuote;
     return snapshot;
   }
 
@@ -860,37 +877,66 @@ class AlpacaRepository {
     return OrderBook(symbol: sym, asks: asks, bids: bids);
   }
 
+  Quote _quoteWithBookL1(Quote q, OrderBook book) {
+    final bid1 = book.bids.isNotEmpty && book.bids.first.isReal ? book.bids.first : null;
+    final ask1 = book.asks.isNotEmpty && book.asks.first.isReal ? book.asks.first : null;
+    if (bid1 == null && ask1 == null) return q;
+    return Quote(
+      symbol: q.symbol,
+      name: q.name,
+      price: q.price,
+      change: q.change,
+      changePct: q.changePct,
+      prevClose: q.prevClose,
+      bid: bid1?.price ?? q.bid,
+      ask: ask1?.price ?? q.ask,
+      bidSize: bid1?.size ?? q.bidSize,
+      askSize: ask1?.size ?? q.askSize,
+    );
+  }
+
+  OrderBook _orderBookFromCustomLevels(
+    String sym,
+    List<OrderBookLevel> asks,
+    List<OrderBookLevel> bids,
+  ) {
+    final askOut = asks.take(_depthLevels).toList();
+    final bidOut = bids.take(_depthLevels).toList();
+    while (askOut.length < _depthLevels) {
+      askOut.add(OrderBookLevel(price: 0, size: 0, isReal: false));
+    }
+    while (bidOut.length < _depthLevels) {
+      bidOut.add(OrderBookLevel(price: 0, size: 0, isReal: false));
+    }
+    return OrderBook(symbol: sym, asks: askOut, bids: bidOut);
+  }
+
+  /// User-configured 五档 API. Returns null when unavailable — caller uses Alpaca L1.
+  Future<OrderBook?> _fetchCustomDepthBook(String sym) async {
+    final tpl = depthApiUrl.trim();
+    if (tpl.isEmpty) return null;
+    try {
+      final url = tpl.replaceAll('{symbol}', sym);
+      final resp = await _depthClient.get<Map<String, dynamic>>(url);
+      final data = resp.data;
+      if (data == null) return null;
+
+      final apiAsks = _levelsFromJsonList(data['asks']);
+      final apiBids = _levelsFromJsonList(data['bids']);
+      if (apiAsks.isEmpty && apiBids.isEmpty) return null;
+
+      return _orderBookFromCustomLevels(sym, apiAsks, apiBids);
+    } catch (_) {
+      return null;
+    }
+  }
+
   OrderBook _trimBookLevels(OrderBook book, int levels) {
     return OrderBook(
       symbol: book.symbol,
       asks: book.asks.take(levels).toList(),
       bids: book.bids.take(levels).toList(),
     );
-  }
-
-  Future<OrderBook> _mergeCustomDepth(OrderBook base, String sym) async {
-    final tpl = depthApiUrl.trim();
-    if (tpl.isEmpty) return base;
-    try {
-      final url = tpl.replaceAll('{symbol}', sym);
-      final resp = await _external.get<Map<String, dynamic>>(url);
-      final data = resp.data;
-      if (data == null) return base;
-
-      final apiAsks = _levelsFromJsonList(data['asks']);
-      final apiBids = _levelsFromJsonList(data['bids']);
-      if (apiAsks.isEmpty && apiBids.isEmpty) return base;
-
-      final asks = List<OrderBookLevel>.from(base.asks);
-      final bids = List<OrderBookLevel>.from(base.bids);
-      for (var i = 0; i < _depthLevels; i++) {
-        if (i < apiAsks.length) asks[i] = apiAsks[i];
-        if (i < apiBids.length) bids[i] = apiBids[i];
-      }
-      return OrderBook(symbol: sym, asks: asks, bids: bids);
-    } catch (_) {
-      return base;
-    }
   }
 
   List<OrderBookLevel> _levelsFromJsonList(Object? raw) {
