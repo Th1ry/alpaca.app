@@ -1,8 +1,8 @@
 {
-  "version": "0.1.7",
-  "build": 8,
-  "android_url": "https://github.com/Th1ry/alpaca.app/releases/download/v0.1.7/alpaca-options-app-v0.1.7.apk",
+  "version": "0.1.8",
+  "build": 9,
+  "android_url": "https://github.com/Th1ry/alpaca.app/releases/download/v0.1.8/alpaca-options-app-v0.1.8.apk",
   "windows_url": "",
-  "notes": "Release v0.1.7: configurable OTA manifest URL in settings.",
+  "notes": "Release v0.1.8: fix buying power labels and OTA manifest.",
   "min_build": 0
 }
