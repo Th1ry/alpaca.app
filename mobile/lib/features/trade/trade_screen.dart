@@ -9,6 +9,7 @@ import '../../models/models.dart';
 import '../../providers/alpaca_connection_provider.dart';
 import '../../providers/portfolio_providers.dart';
 import '../../services/alpaca_client.dart';
+import '../../services/alpaca_repository.dart';
 import '../../services/api_service.dart';
 import '../../services/order_feedback.dart';
 import '../../services/ws_service.dart';
