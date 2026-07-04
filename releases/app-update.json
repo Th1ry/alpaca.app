@@ -3,6 +3,6 @@
   "build": 14,
   "android_url": "https://github.com/Th1ry/alpaca.app/releases/download/v0.1.12/alpaca-options-app-v0.1.12.apk",
   "windows_url": "",
-  "notes": "启动优先加载自选与持仓；按需拉取 K 线与新闻；新闻详情页与可选英译中；下单/平仓反馈与速度优化",
+  "notes": "fix: import MarketSnapshot for release build",
   "min_build": 0
 }
