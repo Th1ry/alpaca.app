@@ -132,23 +132,31 @@ class AlpacaRepository {
     double? limitPrice,
     double? stopPrice,
   }) async {
+    final sym = symbol.toUpperCase();
+    final isOption = _occRe.hasMatch(sym);
+    final qtyStr = isOption ? qty.round().toString() : _formatOrderQty(qty);
     final body = <String, dynamic>{
-      'symbol': symbol.toUpperCase(),
-      'qty': qty.toString(),
+      'symbol': sym,
+      'qty': qtyStr,
       'side': side,
       'type': type,
       'time_in_force': timeInForce,
     };
     if (limitPrice != null) body['limit_price'] = limitPrice.toString();
     if (stopPrice != null) body['stop_price'] = stopPrice.toString();
-    final o = await _client.tradingPost('/v2/orders', body: body) as Map<String, dynamic>;
+    final o = await _client.tradingPostOrder(body: body) as Map<String, dynamic>;
     return _orderFromJson(o);
   }
 
-  Future<OrderModel> closePosition(String symbol, double percent) async {
+  Future<OrderModel> closePosition(String symbol, double percent, {Position? position}) async {
     final sym = symbol.toUpperCase();
-    final rows = await _fetchPositionRows();
-    final row = _rowForSymbol(rows, sym);
+    Map<String, dynamic>? row;
+    if (position != null && position.symbol.toUpperCase() == sym) {
+      row = _rowFromPosition(position);
+    } else {
+      final rows = await _fetchPositionRows();
+      row = _rowForSymbol(rows, sym);
+    }
     if (row == null) throw AlpacaApiException(400, 'no position for $sym');
 
     var qty = (row['qty'] as num).abs().toDouble();
@@ -198,16 +206,19 @@ class AlpacaRepository {
     required String symbol,
     double? takeProfitPrice,
     double? stopLossPrice,
+    Position? position,
   }) async {
     if (takeProfitPrice == null && stopLossPrice == null) {
       throw AlpacaApiException(400, 'take_profit_price or stop_loss_price required');
     }
-    final positions = await getPositions();
-    Position? pos;
-    for (final p in positions) {
-      if (p.symbol.toUpperCase() == symbol.toUpperCase()) {
-        pos = p;
-        break;
+    Position? pos = position;
+    if (pos == null || pos.symbol.toUpperCase() != symbol.toUpperCase()) {
+      final positions = await getPositions();
+      for (final p in positions) {
+        if (p.symbol.toUpperCase() == symbol.toUpperCase()) {
+          pos = p;
+          break;
+        }
       }
     }
     if (pos == null) throw AlpacaApiException(400, 'no position for $symbol');
@@ -305,45 +316,19 @@ class AlpacaRepository {
     }
   }
 
-  Future<Map<String, Quote>> getQuotes(List<String> symbols) async {
+  Future<Map<String, Quote>> getQuotes(List<String> symbols, {int concurrency = 3}) async {
     if (symbols.isEmpty) return {};
-    final stocks = <String>[];
-    final options = <String>[];
-    for (final s in symbols) {
-      final sym = s.toUpperCase();
-      if (_occRe.hasMatch(sym)) {
-        options.add(sym);
-      } else {
-        stocks.add(sym);
-      }
-    }
+    final unique = symbols.map((s) => s.toUpperCase()).toSet().toList();
     final out = <String, Quote>{};
-    if (stocks.isNotEmpty) {
-      try {
-        final data = await _client.dataGet(
-          '/v2/stocks/snapshots?symbols=${stocks.join(',')}&feed=${creds.dataFeed}',
-        ) as Map<String, dynamic>;
-        final snaps = _stockSnapshotsFromResponse(data);
-        for (final sym in stocks) {
-          final snap = snaps[sym] as Map<String, dynamic>?;
-          if (snap != null) {
-            final q = _parseStockSnapshot(sym, snap);
-            _quoteBaseline[sym] = q;
-            out[sym] = q;
-          }
-        }
-      } catch (_) {}
-      for (final sym in stocks) {
-        if (out.containsKey(sym)) continue;
+    final batchSize = concurrency.clamp(1, 8);
+
+    for (var start = 0; start < unique.length; start += batchSize) {
+      final batch = unique.skip(start).take(batchSize).toList();
+      await Future.wait(batch.map((sym) async {
         try {
           out[sym] = await getQuote(sym);
         } catch (_) {}
-      }
-    }
-    for (final occ in options) {
-      try {
-        out[occ] = await _optionQuote(occ);
-      } catch (_) {}
+      }));
     }
     return out;
   }
@@ -460,8 +445,38 @@ class AlpacaRepository {
         url: m['url'] as String? ?? '',
         createdAt: ts,
         symbols: syms is List ? syms.map((e) => e.toString()).toList() : const [],
+        summary: m['summary'] as String? ?? '',
+        content: m['content'] as String? ?? '',
       );
     }).toList();
+  }
+
+  Future<NewsItem?> getNewsById(String id) async {
+    if (id.isEmpty) return null;
+    final data = await _client.dataGet(
+      '/v1beta1/news?ids=$id&include_content=true&limit=1',
+    ) as Map<String, dynamic>;
+    final raw = data['news'] as List<dynamic>? ?? [];
+    if (raw.isEmpty) return null;
+    final m = raw.first as Map<String, dynamic>;
+    final created = m['created_at'] as String? ?? '';
+    var ts = 0;
+    if (created.isNotEmpty) {
+      try {
+        ts = DateTime.parse(created.replaceFirst('Z', '+00:00')).millisecondsSinceEpoch ~/ 1000;
+      } catch (_) {}
+    }
+    final syms = m['symbols'];
+    return NewsItem(
+      id: '${m['id'] ?? ''}',
+      headline: m['headline'] as String? ?? '',
+      source: m['source'] as String? ?? m['author'] as String? ?? '',
+      url: m['url'] as String? ?? '',
+      createdAt: ts,
+      symbols: syms is List ? syms.map((e) => e.toString()).toList() : const [],
+      summary: m['summary'] as String? ?? '',
+      content: m['content'] as String? ?? '',
+    );
   }
 
   Future<OptionsChain> getOptionsChain(String symbol, {String? expiry}) async {
@@ -618,6 +633,19 @@ class AlpacaRepository {
     return null;
   }
 
+  Map<String, dynamic> _rowFromPosition(Position p) {
+    final sym = p.symbol.toUpperCase();
+    final signedQty = p.side.toLowerCase() == 'short' ? -p.qty : p.qty;
+    final multiplier = _occRe.hasMatch(sym) ? 100.0 : 1.0;
+    return {
+      'symbol': p.symbol,
+      'qty': signedQty,
+      'avg_entry_price': p.avgCost,
+      'current_price': p.price,
+      'market_value': p.price * p.qty * multiplier,
+    };
+  }
+
   List<Position> _rowsToPositions(List<Map<String, dynamic>> rows) {
     return rows.map((p) {
       final qtyRaw = _dbl(p['qty']);
@@ -642,6 +670,7 @@ class AlpacaRepository {
         type: o['type'] as String,
         status: o['status'] as String,
         filledAvgPrice: o['filled_avg_price'] != null ? _dbl(o['filled_avg_price']) : null,
+        filledQty: o['filled_qty'] != null ? _dbl(o['filled_qty']) : null,
         submittedAt: o['submitted_at'] as String?,
       );
 
@@ -1277,6 +1306,11 @@ class AlpacaRepository {
 
   bool _looksLikeOptionSnapshot(Map<String, dynamic> snap) =>
       snap.containsKey('latestTrade') || snap.containsKey('latestQuote');
+
+  String _formatOrderQty(double qty) {
+    if (qty == qty.roundToDouble()) return qty.toStringAsFixed(0);
+    return qty.toString();
+  }
 
   double _dbl(dynamic v) {
     if (v == null) return 0.0;

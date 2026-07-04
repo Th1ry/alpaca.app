@@ -5,7 +5,7 @@ import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/ws_service.dart';
 
-/// Bump to force one-shot HTTP refetch (e.g. after orders).
+/// Bump to force portfolio stream providers to re-attach after credential changes.
 final portfolioRefreshProvider = StateProvider<int>((ref) => 0);
 
 final positionsProvider = StreamProvider<List<Position>>((ref) async* {
@@ -16,11 +16,8 @@ final positionsProvider = StreamProvider<List<Position>>((ref) async* {
     return;
   }
   final ws = ref.watch(wsServiceProvider);
-  ws.subscribePortfolio(force: true);
-  try {
-    yield withoutExpiredOptions(await ref.read(apiServiceProvider).getPositions());
-  } catch (_) {
-    yield const <Position>[];
+  if (ws.latestPositions.isNotEmpty) {
+    yield withoutExpiredOptions(ws.latestPositions);
   }
   await for (final rows in ws.positionsStream) {
     yield withoutExpiredOptions(rows);
@@ -35,10 +32,7 @@ final accountProvider = StreamProvider<AccountSummary?>((ref) async* {
     return;
   }
   final ws = ref.watch(wsServiceProvider);
-  ws.subscribePortfolio(force: true);
-  try {
-    yield await ref.read(apiServiceProvider).getAccount();
-  } catch (_) {
+  if (ws.latestAccount != null) {
     yield ws.latestAccount;
   }
   await for (final row in ws.accountStream) {
@@ -53,10 +47,7 @@ final ordersProvider = FutureProvider<List<OrderModel>>((ref) async {
 
 void refreshPortfolio(WidgetRef ref) {
   ref.read(portfolioRefreshProvider.notifier).state++;
-  ref.read(wsServiceProvider).subscribePortfolio(force: true);
-  ref.invalidate(accountProvider);
-  ref.invalidate(positionsProvider);
-  ref.invalidate(ordersProvider);
+  ref.read(wsServiceProvider).pollPortfolioNow();
 }
 
 final pnlPeriodProvider = StateProvider<String>((ref) => '7d');

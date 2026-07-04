@@ -80,6 +80,8 @@ class NewsItem {
   final String url;
   final int createdAt;
   final List<String> symbols;
+  final String summary;
+  final String content;
 
   NewsItem({
     required this.id,
@@ -88,6 +90,8 @@ class NewsItem {
     this.url = '',
     this.createdAt = 0,
     this.symbols = const [],
+    this.summary = '',
+    this.content = '',
   });
 
   factory NewsItem.fromJson(Map<String, dynamic> j) => NewsItem(
@@ -100,7 +104,14 @@ class NewsItem {
                 ?.map((e) => e.toString())
                 .toList() ??
             const [],
+        summary: j['summary'] as String? ?? '',
+        content: j['content'] as String? ?? '',
       );
+
+  String get bodyText {
+    if (content.trim().isNotEmpty) return content;
+    return summary.trim();
+  }
 }
 
 class OrderBookLevel {
@@ -210,6 +221,7 @@ class OrderModel {
   final String type;
   final String status;
   final double? filledAvgPrice;
+  final double? filledQty;
   final String? submittedAt;
 
   OrderModel({
@@ -220,8 +232,14 @@ class OrderModel {
     required this.type,
     required this.status,
     this.filledAvgPrice,
+    this.filledQty,
     this.submittedAt,
   });
+
+  double get effectiveQty => (filledQty != null && filledQty! > 0) ? filledQty! : qty;
+
+  bool get isFilled =>
+      status.toLowerCase() == 'filled' || status.toLowerCase() == 'partially_filled';
 
   factory OrderModel.fromJson(Map<String, dynamic> j) => OrderModel(
         id: j['id'] as String,
@@ -233,6 +251,7 @@ class OrderModel {
         filledAvgPrice: j['filled_avg_price'] != null
             ? (j['filled_avg_price'] as num).toDouble()
             : null,
+        filledQty: j['filled_qty'] != null ? (j['filled_qty'] as num).toDouble() : null,
         submittedAt: j['submitted_at'] as String?,
       );
 }

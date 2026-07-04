@@ -34,6 +34,7 @@ class AppSettings {
     required this.pnlColorMode,
     required this.timezone,
     this.depthApiUrl = '',
+    this.autoTranslateNews = false,
   });
 
   final AlpacaCredentials alpaca;
@@ -44,6 +45,9 @@ class AppSettings {
 
   /// Optional HTTPS template for extended depth (2–5). Use `{symbol}` placeholder.
   final String depthApiUrl;
+
+  /// When language is zh, translate English news via online service.
+  final bool autoTranslateNews;
 
   factory AppSettings.defaults() => AppSettings(
         alpaca: AlpacaCredentials.defaults(),
@@ -62,6 +66,7 @@ class AppSettings {
     PnlColorMode? pnlColorMode,
     AppTimezone? timezone,
     String? depthApiUrl,
+    bool? autoTranslateNews,
   }) {
     return AppSettings(
       alpaca: alpaca ?? this.alpaca,
@@ -70,6 +75,7 @@ class AppSettings {
       pnlColorMode: pnlColorMode ?? this.pnlColorMode,
       timezone: timezone ?? this.timezone,
       depthApiUrl: depthApiUrl ?? this.depthApiUrl,
+      autoTranslateNews: autoTranslateNews ?? this.autoTranslateNews,
     );
   }
 }

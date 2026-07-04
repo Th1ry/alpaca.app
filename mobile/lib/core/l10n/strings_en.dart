@@ -92,6 +92,13 @@ class StringsEn {
   String get news => 'News';
   String get noNews => 'No news';
   String get newsLoadFailed => 'News failed to load';
+  String get newsDetail => 'News';
+  String get newsNoContent => 'No body text — open the original link below';
+  String get newsOpenOriginal => 'Open original';
+  String get newsRelatedSymbols => 'Symbols';
+  String get autoTranslateNews => 'Auto-translate English news';
+  String get autoTranslateNewsHint => 'Translate news to Chinese when online (free quota; falls back to original)';
+  String get newsTranslating => 'Translating…';
   String get buy => 'Buy';
   String get sell => 'Sell';
   String get market => 'Market';

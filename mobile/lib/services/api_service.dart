@@ -74,6 +74,8 @@ class ApiService {
   Future<List<NewsItem>> getNews({int limit = 15, String? symbols}) =>
       _repo.getNews(limit: limit, symbols: symbols);
 
+  Future<NewsItem?> getNewsById(String id) => _repo.getNewsById(id);
+
   Future<OptionsChain> getOptionsChain(String symbol, {String? expiry}) =>
       _repo.getOptionsChain(symbol, expiry: expiry);
 
@@ -94,8 +96,8 @@ class ApiService {
         limitPrice: limitPrice,
       );
 
-  Future<OrderModel> closePosition(String symbol, double percent) =>
-      _repo.closePosition(symbol, percent);
+  Future<OrderModel> closePosition(String symbol, double percent, {Position? position}) =>
+      _repo.closePosition(symbol, percent, position: position);
 
   Future<void> dismissPosition(String symbol) => _repo.dismissPosition(symbol);
 
@@ -103,10 +105,12 @@ class ApiService {
     required String symbol,
     double? takeProfitPrice,
     double? stopLossPrice,
+    Position? position,
   }) =>
       _repo.setPositionBracket(
         symbol: symbol,
         takeProfitPrice: takeProfitPrice,
         stopLossPrice: stopLossPrice,
+        position: position,
       );
 }

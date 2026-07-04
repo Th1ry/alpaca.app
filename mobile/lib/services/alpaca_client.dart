@@ -124,6 +124,35 @@ class AlpacaClient {
   Future<dynamic> tradingPost(String path, {Map<String, dynamic>? body}) =>
       _request(_trading, 'POST', path, body: body);
 
+  /// Shorter timeouts for order submission — fail fast instead of blocking the UI.
+  Future<dynamic> tradingPostOrder({required Map<String, dynamic> body}) async {
+    if (!_creds.isConfigured) {
+      throw AlpacaApiException(503, 'Alpaca API not configured');
+    }
+    try {
+      final resp = await _trading.post<dynamic>(
+        '/v2/orders',
+        data: body,
+        options: Options(
+          sendTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 15),
+        ),
+      );
+      if (resp.data == null || resp.data == '') return {};
+      return resp.data;
+    } on DioException catch (e) {
+      final status = e.response?.statusCode ?? 0;
+      final data = e.response?.data;
+      String msg;
+      if (data is Map) {
+        msg = (data['message'] ?? data['error'] ?? e.message ?? 'HTTP $status').toString();
+      } else {
+        msg = e.message ?? 'HTTP $status';
+      }
+      throw AlpacaApiException(status, msg);
+    }
+  }
+
   Future<dynamic> tradingDelete(String path) =>
       _request(_trading, 'DELETE', path);
 

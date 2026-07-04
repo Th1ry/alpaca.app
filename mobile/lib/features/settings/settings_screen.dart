@@ -652,6 +652,66 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                 ),
 
+                if (settings.language == AppLanguage.zh) ...[
+
+                  const SizedBox(height: 18),
+
+                  Row(
+
+                    crossAxisAlignment: CrossAxisAlignment.start,
+
+                    children: [
+
+                      Expanded(
+
+                        child: Column(
+
+                          crossAxisAlignment: CrossAxisAlignment.start,
+
+                          children: [
+
+                            _PrefLabel(S.autoTranslateNews),
+
+                            const SizedBox(height: 4),
+
+                            Text(
+
+                              S.autoTranslateNewsHint,
+
+                              style: TextStyle(fontSize: 11, color: AppColors.muted, height: 1.35),
+
+                            ),
+
+                          ],
+
+                        ),
+
+                      ),
+
+                      Switch.adaptive(
+
+                        value: settings.autoTranslateNews,
+
+                        onChanged: (v) async {
+
+                          await ref.read(appSettingsProvider.notifier).updatePreferences(
+
+                                autoTranslateNews: v,
+
+                              );
+
+                          _showPrefSaved();
+
+                        },
+
+                      ),
+
+                    ],
+
+                  ),
+
+                ],
+
                 const SizedBox(height: 18),
 
                 _PrefLabel(S.themeLabel),

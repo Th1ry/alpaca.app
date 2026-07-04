@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
 import '../../providers/portfolio_providers.dart';
 import '../../services/alpaca_client.dart';
+import '../../services/order_feedback.dart';
 import '../../services/api_service.dart';
 import 'order_qty_utils.dart';
 
@@ -112,11 +113,14 @@ Future<void> confirmQuickClose(BuildContext context, WidgetRef ref, Position pos
   );
   if (ok != true || !context.mounted) return;
   try {
-    await ref.read(apiServiceProvider).closePosition(position.symbol, 100);
-    refreshPortfolio(ref);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(S.closeSubmitted)));
-    }
+    final order = await ref.read(apiServiceProvider).closePosition(
+          position.symbol,
+          100,
+          position: position,
+        );
+    if (!context.mounted) return;
+    onOrderCompleted(ref, order);
+    showOrderResultSnackBar(context, order);
   } catch (e) {
     if (_isNoLiquidityError(e)) {
       await _offerDismissAfterLiquidityFail(context, ref, position);
@@ -197,12 +201,14 @@ Future<void> showPartialCloseSheet(BuildContext context, WidgetRef ref, Position
                     );
                     if (ok != true || !context.mounted) return;
                     try {
-                      await ref.read(apiServiceProvider).closePosition(position.symbol, percent);
-                      refreshPortfolio(ref);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(SnackBar(content: Text(S.closeSubmitted)));
-                      }
+                      final order = await ref.read(apiServiceProvider).closePosition(
+                            position.symbol,
+                            percent,
+                            position: position,
+                          );
+                      if (!context.mounted) return;
+                      onOrderCompleted(ref, order);
+                      showOrderResultSnackBar(context, order);
                     } catch (e) {
                       if (_isNoLiquidityError(e)) {
                         await _offerDismissAfterLiquidityFail(context, ref, position);
@@ -271,15 +277,16 @@ Future<void> showTpSlSheet(BuildContext context, WidgetRef ref, Position positio
                 final sl = double.tryParse(slCtrl.text.trim());
                 Navigator.pop(ctx);
                 try {
-                  await ref.read(apiServiceProvider).setPositionBracket(
+                  final orders = await ref.read(apiServiceProvider).setPositionBracket(
                         symbol: position.symbol,
                         takeProfitPrice: tp,
                         stopLossPrice: sl,
+                        position: position,
                       );
-                  refreshPortfolio(ref);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(SnackBar(content: Text(S.tpSlSubmitted)));
+                  if (!context.mounted) return;
+                  if (orders.isNotEmpty) {
+                    onOrderCompleted(ref, orders.last);
+                    showOrderResultSnackBar(context, orders.last);
                   }
                 } catch (e) {
                   if (context.mounted) {

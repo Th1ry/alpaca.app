@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../../core/strings.dart';
 import '../../models/models.dart';
-import '../../providers/alpaca_connection_provider.dart';
 import '../../providers/portfolio_providers.dart';
 import '../../shared/widgets/positions_list.dart';
 import '../../shared/widgets/widgets.dart';
@@ -13,9 +12,14 @@ import '../../shared/widgets/floating_capsule_nav.dart';
 import 'pnl_analytics_screen.dart';
 
 class PortfolioScreen extends ConsumerWidget {
-  const PortfolioScreen({super.key, required this.onTapPosition});
+  const PortfolioScreen({
+    super.key,
+    required this.onTapPosition,
+    this.isActive = false,
+  });
 
   final void Function(Position position) onTapPosition;
+  final bool isActive;
 
   static List<(String, String)> get _periodOptions => [
     ('7d', S.period7d),
@@ -31,16 +35,10 @@ class PortfolioScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.listen(alpacaConnectionProvider, (prev, next) {
-      if (next.phase == AlpacaConnPhase.ok) {
-        refreshPortfolio(ref);
-      }
-    });
-
     final accountAsync = ref.watch(accountProvider);
     final positionsAsync = ref.watch(positionsProvider);
     final period = ref.watch(pnlPeriodProvider);
-    final historyAsync = ref.watch(portfolioHistoryProvider(period));
+    final historyAsync = isActive ? ref.watch(portfolioHistoryProvider(period)) : null;
     final money = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
     final pct = NumberFormat('+#0.00;-#0.00');
 
@@ -58,7 +56,7 @@ class PortfolioScreen extends ConsumerWidget {
     }
 
     final account = accountAsync.value;
-    final history = historyAsync.valueOrNull;
+    final history = historyAsync?.valueOrNull;
 
     return Stack(
       children: [
@@ -66,6 +64,7 @@ class PortfolioScreen extends ConsumerWidget {
         RefreshIndicator(
       onRefresh: () async {
         refreshPortfolio(ref);
+        if (!isActive) return;
         await Future.wait([
           ref.read(accountProvider.future),
           ref.read(positionsProvider.future),
@@ -130,7 +129,7 @@ class PortfolioScreen extends ConsumerWidget {
                     onSelect: (k) => ref.read(pnlPeriodProvider.notifier).state = k,
                   ),
                   const SizedBox(height: 8),
-                  if (historyAsync.isLoading && history == null)
+                  if (isActive && historyAsync != null && historyAsync.isLoading && history == null)
                     const SizedBox(
                       height: 120,
                       child: Center(child: CircularProgressIndicator(strokeWidth: 2)),

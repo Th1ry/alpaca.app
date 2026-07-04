@@ -121,10 +121,7 @@ class AlpacaConnectionNotifier extends StateNotifier<AlpacaConnectionView> {
 
   void _refreshAppData() {
     _ref.read(portfolioRefreshProvider.notifier).state++;
-    _ref.read(wsServiceProvider).subscribePortfolio(force: true);
-    _ref.invalidate(accountProvider);
-    _ref.invalidate(positionsProvider);
-    _ref.invalidate(ordersProvider);
+    _ref.read(wsServiceProvider).pollPortfolioNow();
   }
 
   /// Test credentials. When [persistOnSuccess] is true, saves to device on success.

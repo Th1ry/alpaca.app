@@ -90,6 +90,13 @@ class StringsZh {
   String get news => '新闻';
   String get noNews => '暂无新闻';
   String get newsLoadFailed => '新闻加载失败';
+  String get newsDetail => '新闻详情';
+  String get newsNoContent => '暂无正文，可点击下方查看原文';
+  String get newsOpenOriginal => '查看原文';
+  String get newsRelatedSymbols => '相关标的';
+  String get autoTranslateNews => '自动翻译英文新闻';
+  String get autoTranslateNewsHint => '联网将英文新闻译为中文（免费额度，失败时显示原文）';
+  String get newsTranslating => '翻译中…';
   String get buy => '买入';
   String get sell => '卖出';
   String get market => '市价';

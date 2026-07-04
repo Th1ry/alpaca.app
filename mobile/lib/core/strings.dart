@@ -99,6 +99,13 @@ class S {
   static String get news => _active.news;
   static String get noNews => _active.noNews;
   static String get newsLoadFailed => _active.newsLoadFailed;
+  static String get newsDetail => _active.newsDetail;
+  static String get newsNoContent => _active.newsNoContent;
+  static String get newsOpenOriginal => _active.newsOpenOriginal;
+  static String get newsRelatedSymbols => _active.newsRelatedSymbols;
+  static String get autoTranslateNews => _active.autoTranslateNews;
+  static String get autoTranslateNewsHint => _active.autoTranslateNewsHint;
+  static String get newsTranslating => _active.newsTranslating;
   static String get buy => _active.buy;
   static String get sell => _active.sell;
   static String get market => _active.market;

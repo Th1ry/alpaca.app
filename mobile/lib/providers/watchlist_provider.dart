@@ -1,28 +1,22 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../core/constants.dart';
-import '../services/ws_service.dart';
-
 const _watchlistKey = 'watchlist_v1';
 
 final watchlistProvider = StateNotifierProvider<WatchlistNotifier, List<String>>((ref) {
-  final notifier = WatchlistNotifier(ref);
+  final notifier = WatchlistNotifier();
   notifier.load();
   return notifier;
 });
 
 class WatchlistNotifier extends StateNotifier<List<String>> {
-  WatchlistNotifier(this._ref) : super(List.from(AppConstants.defaultWatchlist));
-
-  final Ref _ref;
+  WatchlistNotifier() : super(const []);
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getStringList(_watchlistKey);
     if (saved != null && saved.isNotEmpty) {
       state = saved.map((s) => s.toUpperCase()).toList();
-      _ref.read(wsServiceProvider).subscribe(state);
     }
   }
 
@@ -38,7 +32,6 @@ class WatchlistNotifier extends StateNotifier<List<String>> {
     if (contains(sym)) return;
     state = [...state, sym];
     await _save();
-    _ref.read(wsServiceProvider).subscribe([sym]);
   }
 
   Future<void> remove(String symbol) async {

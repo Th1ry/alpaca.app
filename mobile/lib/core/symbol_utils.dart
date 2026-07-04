@@ -46,6 +46,25 @@ String formatOptionPositionLabel(String symbol) {
   return '$root $strikeText$type · $y-$mo-$d';
 }
 
+/// Watchlist + open positions (including option contracts and underlyings).
+List<String> collectPrioritySymbols(List<String> watchlist, List<Position> positions) {
+  final out = <String>{};
+  for (final raw in watchlist) {
+    final sym = raw.trim().toUpperCase();
+    if (sym.isNotEmpty) out.add(sym);
+  }
+  for (final p in positions) {
+    final sym = p.symbol.trim().toUpperCase();
+    if (sym.isEmpty) continue;
+    out.add(sym);
+    if (isOptionSymbol(sym)) {
+      final und = optionUnderlying(sym);
+      if (und != null && und.isNotEmpty) out.add(und);
+    }
+  }
+  return out.toList();
+}
+
 List<Position> withoutExpiredOptions(List<Position> positions) {
   return positions
       .where((p) => !isOptionSymbol(p.symbol) || !isOptionExpired(p.symbol))

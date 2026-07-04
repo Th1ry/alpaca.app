@@ -29,6 +29,7 @@ const _kPnlColor = 'pnl_color_mode';
 const _kTimezone = 'app_timezone';
 
 const _kDepthApiUrl = 'depth_api_url';
+const _kAutoTranslateNews = 'auto_translate_news';
 
 
 
@@ -73,6 +74,8 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
       timezone: AppTimezone.fromId(p.getString(_kTimezone)),
 
       depthApiUrl: p.getString(_kDepthApiUrl) ?? DepthApiConfig.urlTemplate,
+
+      autoTranslateNews: p.getBool(_kAutoTranslateNews) ?? false,
 
     );
 
@@ -160,6 +163,8 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
 
     AppTimezone? timezone,
 
+    bool? autoTranslateNews,
+
   }) async {
 
     final p = await SharedPreferences.getInstance();
@@ -172,6 +177,8 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
 
     if (timezone != null) await p.setString(_kTimezone, timezone.id);
 
+    if (autoTranslateNews != null) await p.setBool(_kAutoTranslateNews, autoTranslateNews);
+
 
 
     state = state.copyWith(
@@ -183,6 +190,8 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
       pnlColorMode: pnlColorMode,
 
       timezone: timezone,
+
+      autoTranslateNews: autoTranslateNews,
 
     );
 

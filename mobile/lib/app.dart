@@ -13,10 +13,8 @@ import 'features/portfolio/portfolio_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/trade/trade_screen.dart';
 import 'models/models.dart';
-import 'providers/alpaca_connection_provider.dart';
 import 'providers/app_settings_provider.dart';
 import 'providers/app_update_provider.dart';
-import 'providers/portfolio_providers.dart';
 import 'services/api_service.dart';
 import 'services/ws_service.dart';
 import 'features/settings/app_update_dialog.dart';
@@ -82,7 +80,6 @@ class _AlpacaOptionsAppState extends ConsumerState<AlpacaOptionsApp> {
       _tradeSelectedOcc = null;
       _tab = 1;
     });
-    refreshPortfolio(ref);
   }
 
   void _goTradePosition(Position position) {
@@ -94,13 +91,11 @@ class _AlpacaOptionsAppState extends ConsumerState<AlpacaOptionsApp> {
       _tradeSelectedOcc = occ;
       _tab = 1;
     });
-    refreshPortfolio(ref);
   }
 
   void _onTabTap(int i) {
     if (i == _tab) return;
     setState(() => _tab = i);
-    if (i == 1 || i == 2) refreshPortfolio(ref);
   }
 
   void _openSettings() {
@@ -116,13 +111,7 @@ class _AlpacaOptionsAppState extends ConsumerState<AlpacaOptionsApp> {
       if (prev?.apiKey != next.apiKey ||
           prev?.apiSecret != next.apiSecret ||
           prev?.apiUrl != next.apiUrl) {
-        refreshPortfolio(ref);
         ref.read(wsServiceProvider).subscribePortfolio(force: true);
-      }
-    });
-    ref.listen(alpacaConnectionProvider, (prev, next) {
-      if (prev?.phase != AlpacaConnPhase.ok && next.phase == AlpacaConnPhase.ok) {
-        refreshPortfolio(ref);
       }
     });
 
@@ -218,11 +207,16 @@ class _AlpacaOptionsAppState extends ConsumerState<AlpacaOptionsApp> {
                   child: IndexedStack(
                     index: _tab,
                     children: [
-                      HomeScreen(key: ValueKey('home-${settings.language.name}'), onTrade: _goTrade),
+                      HomeScreen(
+                        key: ValueKey('home-${settings.language.name}'),
+                        isActive: _tab == 0,
+                        onTrade: _goTrade,
+                      ),
                       TradeScreen(
                         key: ValueKey('trade-${settings.language.name}:${_tradeSelectedOcc ?? ''}'),
                         symbol: _tradeSymbol,
                         selectedOcc: _tradeSelectedOcc,
+                        isActive: _tab == 1,
                         onSymbolChange: (s) => setState(() {
                           _tradeSymbol = s;
                           _tradeSelectedOcc = null;
@@ -230,6 +224,7 @@ class _AlpacaOptionsAppState extends ConsumerState<AlpacaOptionsApp> {
                       ),
                       PortfolioScreen(
                         key: ValueKey('portfolio-${settings.language.name}'),
+                        isActive: _tab == 2,
                         onTapPosition: _goTradePosition,
                       ),
                     ],

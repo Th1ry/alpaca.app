@@ -10,6 +10,7 @@ import '../../providers/alpaca_connection_provider.dart';
 import '../../providers/portfolio_providers.dart';
 import '../../services/alpaca_client.dart';
 import '../../services/api_service.dart';
+import '../../services/order_feedback.dart';
 import '../../services/ws_service.dart';
 import '../../shared/widgets/floating_capsule_nav.dart';
 import '../../shared/widgets/symbol_search_field.dart';
@@ -28,11 +29,13 @@ class TradeScreen extends ConsumerStatefulWidget {
     required this.symbol,
     this.selectedOcc,
     this.onSymbolChange,
+    this.isActive = false,
   });
 
   final String symbol;
   final String? selectedOcc;
   final ValueChanged<String>? onSymbolChange;
+  final bool isActive;
 
   @override
   ConsumerState<TradeScreen> createState() => _TradeScreenState();
@@ -49,7 +52,8 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
   final _qtyCtrl = TextEditingController(text: '1');
   final _limitCtrl = TextEditingController();
   final _searchCtrl = TextEditingController();
-  bool _loading = true;
+  bool _loading = false;
+  bool _submitting = false;
   String? _error;
   String? _selectedOcc;
   String _ratioSymbolKey = '';
@@ -75,16 +79,12 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
     _ratioSymbolKey = _activeSymbol;
     _searchCtrl.text = widget.symbol;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      refreshPortfolio(ref);
-      ref.read(wsServiceProvider).subscribe([_symbol]);
-      ref.read(wsServiceProvider).subscribePortfolio();
       if (widget.selectedOcc != null) {
         _openPositionBySymbol(widget.selectedOcc!);
+      } else if (widget.isActive && widget.symbol.isNotEmpty) {
+        _load();
       }
     });
-    if (widget.selectedOcc == null) {
-      _load();
-    }
   }
 
   @override
@@ -98,6 +98,19 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
   @override
   void didUpdateWidget(covariant TradeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isActive && widget.isActive) {
+      if (widget.selectedOcc != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _openPositionBySymbol(widget.selectedOcc!);
+        });
+      } else if (widget.symbol.isNotEmpty) {
+        if (_quote == null && !_loading) {
+          _load();
+        } else {
+          _subscribeActiveQuote();
+        }
+      }
+    }
     if (widget.selectedOcc != oldWidget.selectedOcc && widget.selectedOcc != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _openPositionBySymbol(widget.selectedOcc!);
@@ -109,8 +122,21 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
       _selectedOcc = null;
       _syncRatioSymbolReset();
       _searchCtrl.text = _symbol;
-      ref.read(wsServiceProvider).subscribe([_symbol]);
-      _load();
+      if (widget.isActive && _symbol.isNotEmpty) {
+        _load();
+      } else if (_symbol.isEmpty) {
+        setState(() {
+          _quote = null;
+          _bars = [];
+          _chain = null;
+          _loading = false;
+          _error = null;
+        });
+        ref.read(wsServiceProvider).setFocusSymbol(null);
+      }
+    }
+    if (oldWidget.isActive && !widget.isActive) {
+      ref.read(wsServiceProvider).setFocusSymbol(null);
     }
   }
 
@@ -127,7 +153,6 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
         setState(() => _symbol = und);
         widget.onSymbolChange?.call(und);
         _searchCtrl.text = und;
-        ref.read(wsServiceProvider).subscribe([und]);
       }
       final positions = ref.read(positionsProvider).valueOrNull ?? [];
       Position? pos;
@@ -149,15 +174,13 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
     _syncRatioSymbolReset();
     widget.onSymbolChange?.call(symbol);
     _searchCtrl.text = symbol;
-    ref.read(wsServiceProvider).subscribe([symbol]);
     _goToChartTab();
     await _load();
   }
 
   void _subscribeActiveQuote() {
-    final ws = ref.read(wsServiceProvider);
-    ws.subscribe([_activeSymbol]);
-    ws.setFocusSymbol(_activeSymbol);
+    if (!widget.isActive || _symbol.isEmpty) return;
+    ref.read(wsServiceProvider).setFocusSymbol(_activeSymbol);
   }
 
   Future<void> _loadChartBars([String? symbol, String? tf]) async {
@@ -212,6 +235,7 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
   }
 
   Future<void> _load() async {
+    if (!widget.isActive || _symbol.isEmpty) return;
     final gen = ++_loadGen;
     setState(() {
       _loading = true;
@@ -226,15 +250,6 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
         });
       }
       return;
-    }
-
-    final conn = ref.read(alpacaConnectionProvider);
-    if (conn.phase == AlpacaConnPhase.testing) {
-      await Future.any([
-        ref.read(alpacaConnectionProvider.notifier).verify(showSnack: false),
-        Future<void>.delayed(const Duration(seconds: 8)),
-      ]);
-      if (!mounted || gen != _loadGen) return;
     }
 
     try {
@@ -307,37 +322,38 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     final qty = double.tryParse(_qtyCtrl.text);
     if (qty == null || qty <= 0) return;
     final sym = _selectedOcc ?? _symbol;
     final limit = double.tryParse(_limitCtrl.text);
+    setState(() => _submitting = true);
     try {
-      await ref.read(apiServiceProvider).submitOrder(
+      final order = await ref.read(apiServiceProvider).submitOrder(
             symbol: sym,
             qty: qty,
             side: _side,
             type: _orderType,
             limitPrice: _orderType == 'limit' ? limit : null,
           );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(S.orderSubmitted)),
-        );
-        refreshPortfolio(ref);
-        _load();
-      }
+      if (!mounted) return;
+      onOrderCompleted(ref, order);
+      showOrderResultSnackBar(context, order);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('$e')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     ref.listen(alpacaCredentialsProvider, (prev, next) {
+      if (!widget.isActive) return;
       if (next.isConfigured &&
           (prev?.apiKey != next.apiKey ||
               prev?.apiSecret != next.apiSecret ||
@@ -346,6 +362,7 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
       }
     });
     ref.listen(alpacaConnectionProvider, (prev, next) {
+      if (!widget.isActive || _symbol.isEmpty) return;
       if (prev?.phase != AlpacaConnPhase.ok &&
           next.phase == AlpacaConnPhase.ok &&
           (_error != null || _quote == null)) {
@@ -355,7 +372,9 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
 
     final money = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
     final pct = NumberFormat('+#0.00;-#0.00');
-    final liveSnap = ref.watch(marketSnapshotStreamProvider(_activeSymbol));
+    final liveSnap = widget.isActive && _symbol.isNotEmpty
+        ? ref.watch(marketSnapshotStreamProvider(_activeSymbol))
+        : const AsyncValue<MarketSnapshot?>.data(null);
     final displayQuote = liveSnap.valueOrNull?.quote ?? _quote;
     final displayBook = liveSnap.valueOrNull?.orderBook;
     if (_orderType == 'market' && displayQuote != null) {
@@ -395,7 +414,14 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
           ),
         ),
         Expanded(
-          child: _loading
+          child: _symbol.isEmpty
+              ? Center(
+                  child: Text(
+                    S.searchSymbolOrName,
+                    style: TextStyle(color: AppColors.muted, fontSize: 14),
+                  ),
+                )
+              : _loading
               ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
               : _error != null
                   ? ApiErrorView(
@@ -542,6 +568,7 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
                     });
                   },
                   onSubmit: _submit,
+                  submitting: _submitting,
                 ),
               ),
             ],
@@ -606,6 +633,7 @@ class _OrderFormColumn extends StatelessWidget {
     required this.onSide,
     required this.onType,
     required this.onSubmit,
+    this.submitting = false,
   });
 
   final String? selectedOcc;
@@ -623,7 +651,8 @@ class _OrderFormColumn extends StatelessWidget {
   final List<Position> positions;
   final ValueChanged<String> onSide;
   final ValueChanged<String> onType;
-  final VoidCallback onSubmit;
+  final Future<void> Function() onSubmit;
+  final bool submitting;
 
   @override
   Widget build(BuildContext context) {
@@ -691,7 +720,7 @@ class _OrderFormColumn extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         FilledButton(
-          onPressed: onSubmit,
+          onPressed: submitting ? null : onSubmit,
           style: FilledButton.styleFrom(
             minimumSize: const Size.fromHeight(42),
             backgroundColor: isBuy ? AppColors.green : AppColors.red,
@@ -699,7 +728,13 @@ class _OrderFormColumn extends StatelessWidget {
               borderRadius: BorderRadius.circular(OkxRadius.pill),
             ),
           ),
-          child: Text(isBuy ? S.buy : S.sell),
+          child: submitting
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : Text(isBuy ? S.buy : S.sell),
         ),
       ],
     );

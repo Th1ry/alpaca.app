@@ -18,9 +18,14 @@ import '../../shared/widgets/floating_capsule_nav.dart';
 import 'news_section.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key, required this.onTrade});
+  const HomeScreen({
+    super.key,
+    required this.onTrade,
+    this.isActive = true,
+  });
 
   final void Function(String symbol) onTrade;
+  final bool isActive;
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -29,25 +34,51 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final Map<String, Quote> _quotes = {};
   final Map<String, List<Bar>> _sparks = {};
-  bool _loading = true;
+  bool _loading = false;
   bool _editingWatchlist = false;
+  bool _newsEnabled = false;
   String? _revealedDeleteSym;
   String? _error;
+  String? _loadedSymbolsKey;
+  int _sparkGen = 0;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.isActive) _loadPriority();
+    });
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    final watchlist = ref.read(watchlistProvider);
-    if (watchlist.isEmpty) {
-      setState(() => _loading = false);
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isActive && widget.isActive) {
+      _loadPriority();
+    } else if (oldWidget.isActive && !widget.isActive) {
+      ref.read(wsServiceProvider).setBackgroundSymbols(const []);
+    }
+  }
+
+  List<String> _watchlistSymbols() => List<String>.from(ref.read(watchlistProvider));
+
+  Future<void> _loadPriority({bool force = false}) async {
+    if (!widget.isActive) return;
+    final symbols = _watchlistSymbols();
+    final key = symbols.join(',');
+    if (!force && key == _loadedSymbolsKey && _quotes.isNotEmpty) {
+      ref.read(wsServiceProvider).setBackgroundSymbols(symbols);
+      if (mounted && !_newsEnabled) setState(() => _newsEnabled = true);
+      return;
+    }
+    if (symbols.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = null;
+          _newsEnabled = true;
+        });
+      }
       return;
     }
     final api = ref.read(apiServiceProvider);
@@ -60,56 +91,64 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
       return;
     }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final quotes = await api.getQuotes(watchlist);
-      ref.read(wsServiceProvider).subscribe(watchlist);
+      final quotes = await api.getQuotes(symbols);
+      ref.read(wsServiceProvider).setBackgroundSymbols(symbols);
       if (mounted) {
         setState(() {
           _quotes
             ..clear()
             ..addAll(quotes);
           _loading = false;
+          _newsEnabled = true;
+          _loadedSymbolsKey = key;
         });
       }
-      _loadSparks(watchlist);
+      _loadSparksLazy(symbols);
     } catch (e) {
       if (mounted) {
         setState(() {
           _loading = false;
           _error = e.toString();
+          _newsEnabled = true;
         });
       }
     }
   }
 
-  Future<void> _loadSparks(List<String> watchlist) async {
+  Future<void> _loadSparksLazy(List<String> symbols) async {
+    final gen = ++_sparkGen;
     final api = ref.read(apiServiceProvider);
-    final results = await Future.wait(
-      watchlist.map((sym) => api.getSparklineBars(sym).catchError((_) => <Bar>[])),
-    );
-    if (!mounted) return;
-    setState(() {
-      for (var i = 0; i < watchlist.length; i++) {
-        _sparks[watchlist[i]] = results[i];
-      }
-    });
+    for (final sym in symbols) {
+      if (!mounted || gen != _sparkGen) return;
+      try {
+        final bars = await api.getSparklineBars(sym);
+        if (!mounted || gen != _sparkGen) return;
+        setState(() => _sparks[sym] = bars);
+      } catch (_) {}
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     ref.listen<List<String>>(watchlistProvider, (prev, next) {
-      if (prev != null && prev != next) _load();
+      if (widget.isActive && prev != null && prev != next) _loadPriority(force: true);
     });
     ref.listen(alpacaCredentialsProvider, (prev, next) {
+      if (!widget.isActive) return;
       if (prev?.isConfigured != next.isConfigured ||
           (next.isConfigured &&
               (prev?.apiKey != next.apiKey || prev?.apiSecret != next.apiSecret))) {
-        _load();
+        _loadPriority();
       }
     });
 
     ref.listen(alpacaConnectionProvider, (prev, next) {
-      if (next.phase == AlpacaConnPhase.ok) _load();
+      if (widget.isActive && next.phase == AlpacaConnPhase.ok) _loadPriority();
     });
 
     final account = ref.watch(accountProvider).valueOrNull;
@@ -117,11 +156,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final money = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
     final pct = NumberFormat('+#0.00;-#0.00');
 
-    if (_loading && _quotes.isEmpty) {
+    if (_loading && _quotes.isEmpty && watchlist.isNotEmpty) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
-    if (_error != null && _quotes.isEmpty) {
-      return ApiErrorView(onRetry: _load, detail: S.loadFailedHint);
+    if (_error != null && _quotes.isEmpty && watchlist.isNotEmpty) {
+      return ApiErrorView(onRetry: _loadPriority, detail: S.loadFailedHint);
     }
 
     return Stack(
@@ -131,7 +170,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       onRefresh: () async {
         refreshPortfolio(ref);
         ref.invalidate(newsProvider);
-        await _load();
+        await _loadPriority(force: true);
       },
       child: ListView(
         padding: EdgeInsets.fromLTRB(0, 0, 0, FloatingCapsuleNav.overlayInset(context)),
@@ -181,8 +220,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   )
                 else
                   ...watchlist.map((sym) {
-                    final live = ref.watch(quoteStreamProvider(sym));
-                    final q = live.valueOrNull ?? _quotes[sym];
+                    final q = widget.isActive
+                        ? (ref.watch(quoteStreamProvider(sym)).valueOrNull ?? _quotes[sym])
+                        : _quotes[sym];
                     final revealDelete = _editingWatchlist && _revealedDeleteSym == sym;
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 0),
@@ -244,7 +284,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     );
                   }),
                 const SizedBox(height: 20),
-                NewsSection(onSymbolTap: widget.onTrade),
+                if (widget.isActive && _newsEnabled) const NewsSection(),
               ],
             ),
           ),
